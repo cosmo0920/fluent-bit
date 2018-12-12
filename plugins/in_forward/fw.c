@@ -21,7 +21,7 @@
 #include <fluent-bit/flb_input.h>
 #include <fluent-bit/flb_network.h>
 
-#ifndef _WIN32
+#ifdef FLB_HAVE_UNIX_SOCKET
 #include <sys/socket.h>
 #include <sys/un.h>
 #endif
@@ -30,7 +30,7 @@
 #include "fw_conn.h"
 #include "fw_config.h"
 
-#ifndef _WIN32
+#ifdef FLB_HAVE_UNIX_SOCKET
 static int fw_unix_create(struct flb_in_fw_config *ctx)
 {
     flb_sockfd_t fd = -1;
@@ -116,7 +116,7 @@ static int in_fw_init(struct flb_input_instance *in,
 
     /* Unix Socket mode */
     if (ctx->unix_path) {
-#ifdef _WIN32
+#ifndef FLB_HAVE_UNIX_SOCKET
         flb_error("[in_fw] unix address is not supported %s:%s. Aborting",
             ctx->listen, ctx->tcp_port);
         fw_config_destroy(ctx);
