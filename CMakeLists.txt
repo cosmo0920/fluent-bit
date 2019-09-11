@@ -226,6 +226,9 @@ if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
     message(STATUS "Found Homebrew at ${HOMEBREW_PREFIX}")
     include(cmake/homebrew.cmake)
   endif()
+
+  set(FLB_SYSTEM_MACOS On)
+  add_definitions(-DFLB_SYSTEM_MACOS)
 endif()
 
 # Optional features like Stream Processor and Record Accessor needs Flex
