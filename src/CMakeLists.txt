@@ -395,6 +395,10 @@ if(FLB_JEMALLOC)
   target_link_libraries(fluent-bit-static libjemalloc)
 endif()
 
+if(FLB_EBPF)
+  target_link_libraries(fluent-bit-static libbpf)
+endif()
+
 # Binary / Executable
 if(FLB_BINARY)
   find_package (Threads)
@@ -421,6 +425,10 @@ if(FLB_BINARY)
   if(FLB_BACKTRACE)
     add_definitions(-DFLB_DUMP_STACKTRACE=1)
     target_link_libraries(fluent-bit-bin libbacktrace)
+  endif()
+
+  if(FLB_EBPF)
+    target_link_libraries(fluent-bit-bin libbpf)
   endif()
 
   target_link_libraries(fluent-bit-bin fluent-bit-static ${CMAKE_THREAD_LIBS_INIT})
