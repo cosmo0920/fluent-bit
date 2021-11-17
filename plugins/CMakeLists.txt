@@ -170,6 +170,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   REGISTER_IN_PLUGIN("in_docker")
   REGISTER_IN_PLUGIN("in_docker_events")
   REGISTER_IN_PLUGIN("in_node_exporter_metrics")
+  REGISTER_IN_PLUGIN("in_ebpf")
 endif()
 
 REGISTER_IN_PLUGIN("in_fluentbit_metrics")
@@ -278,6 +279,10 @@ endif()
 
 if(FLB_LUAJIT)
   REGISTER_FILTER_PLUGIN("filter_lua")
+endif()
+
+if(FLB_EBPF)
+  REGISTER_FILTER_PLUGIN("filter_ebpf")
 endif()
 
 REGISTER_FILTER_PLUGIN("filter_stdout")
