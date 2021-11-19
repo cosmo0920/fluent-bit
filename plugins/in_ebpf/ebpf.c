@@ -69,9 +69,7 @@ static int prepare_vsstat_ebpf(struct flb_in_ebpf *ctx)
         goto cleanup;
     }
 
-    flb_plg_info(ctx->ins,
-                 "Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` "
-                 "to see output of the BPF programs.");
+    flb_plg_info(ctx->ins, "Successfully eBPF vsstat started!");
 
     ctx->vfsstat_skel = skel;
 
@@ -110,9 +108,7 @@ static int prepare_oom_victim_ebpf(struct flb_in_ebpf *ctx)
         goto cleanup;
     }
 
-    flb_plg_info(ctx->ins,
-                 "Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` "
-                 "to see output of the BPF programs.");
+    flb_plg_info(ctx->ins, "Successfully eBPF oom_victim started!");
 
     ctx->oom_victim_skel = skel;
 
@@ -137,44 +133,63 @@ static void cb_ebpf_resume(void *data, struct flb_config *config)
     flb_input_collector_resume(ctx->coll_fd, ctx->ins);
 }
 
-static void print_map(struct bpf_map *map)
+static int collect_oom_victim(struct flb_input_instance *ins,
+                              struct flb_config *config, void *in_context)
 {
-    __u64 lookup_key = -1, next_key;
+    struct flb_in_ebpf *ctx = in_context;
+    __u64 key = -1;
+    __u64 next_key;
+    __u64 remove_key;
+    struct bpf_map *map = ctx->oom_victim_skel->maps.oomkill;
     int err, fd = bpf_map__fd(map);
     __u8 value;
-    __u32 pid;
+    msgpack_packer mp_pck;
+    msgpack_sbuffer mp_sbuf;
+    __u32 count = 0;
 
-    while (!bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
+    /* Initialize local msgpack buffer */
+    msgpack_sbuffer_init(&mp_sbuf);
+    msgpack_packer_init(&mp_pck, &mp_sbuf, msgpack_sbuffer_write);
+
+    msgpack_pack_array(&mp_pck, 2);
+    flb_pack_time_now(&mp_pck);
+
+    while (!bpf_map_get_next_key(fd, &key, &next_key)) {
         err = bpf_map_lookup_elem(fd, &next_key, &value);
         if (err < 0) {
-            flb_error("failed to lookup infos: %d\n", err);
-            return;
+            key = next_key;
+            continue;
         }
-        pid = next_key >> 32;
-        flb_info("%-8u %-4u\n", pid, value);
-    }
-    flb_info("Hi!");
 
-    lookup_key = -1;
-    while (!bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
-        err = bpf_map_delete_elem(fd, &next_key);
-        if (err < 0) {
-            flb_error("failed to cleanup infos: %d\n", err);
-            return;
-        }
-        lookup_key = next_key;
+        bpf_map_delete_elem(fd, &remove_key);
+
+        count++;
+
+        remove_key = key;
+
+        key = next_key;
     }
+    bpf_map_delete_elem(fd, &remove_key);
+
+    msgpack_pack_map(&mp_pck, 1);
+
+    msgpack_pack_str(&mp_pck, 10);
+    msgpack_pack_str_body(&mp_pck, "oom_victim", 10);
+    msgpack_pack_uint32(&mp_pck, count);
+
+    flb_input_chunk_append_raw(ins, NULL, 0, mp_sbuf.data, mp_sbuf.size);
+    msgpack_sbuffer_destroy(&mp_sbuf);
+
+    return 0;
 }
 
-static int cb_ebpf_collect(struct flb_input_instance *ins,
+static int collect_vfsstat(struct flb_input_instance *ins,
                            struct flb_config *config, void *in_context)
 {
     struct flb_in_ebpf *ctx = in_context;
     msgpack_packer mp_pck;
     msgpack_sbuffer mp_sbuf;
     int count = 8;
-
-    print_map(ctx->oom_victim_skel->maps.oomkill);
 
     /* Initialize local msgpack buffer */
     msgpack_sbuffer_init(&mp_sbuf);
@@ -227,6 +242,15 @@ static int cb_ebpf_collect(struct flb_input_instance *ins,
 
     flb_input_chunk_append_raw(ins, NULL, 0, mp_sbuf.data, mp_sbuf.size);
     msgpack_sbuffer_destroy(&mp_sbuf);
+
+    return 0;
+}
+
+static int cb_ebpf_collect(struct flb_input_instance *ins,
+                           struct flb_config *config, void *in_context)
+{
+    collect_oom_victim(ins, config, in_context);
+    collect_vfsstat(ins, config, in_context);
 
     return 0;
 }
