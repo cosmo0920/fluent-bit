@@ -27,11 +27,13 @@
 #include <fluent-bit/flb_pack.h>
 
 #include <bpf/libbpf.h>
+#include <bpf/bpf.h>
 #include <msgpack.h>
 #include <sys/resource.h>
 #include "ebpf.h"
 #include "vfsstat.skel.h"
 #include "vfsstat.h"
+#include "oom_victim.skel.h"
 
 static int print_libbpf_log(enum libbpf_print_level level, const char *fmt, va_list args)
 {
@@ -82,6 +84,46 @@ cleanup:
     return -1;
 }
 
+static int prepare_oom_victim_ebpf(struct flb_in_ebpf *ctx)
+{
+    struct oom_victim_bpf *skel;
+    int err;
+
+    /* Open BPF application */
+    skel = oom_victim_bpf__open();
+    if (!skel) {
+        flb_plg_error(ctx->ins, "Failed to open BPF skeleton");
+        return 1;
+    }
+
+    /* Load & verify BPF programs */
+    err = oom_victim_bpf__load(skel);
+    if (err) {
+        flb_plg_error(ctx->ins, "Failed to load and verify BPF skeleton");
+        goto cleanup;
+    }
+
+    /* Attach tracepoint handler */
+    err = oom_victim_bpf__attach(skel);
+    if (err) {
+        flb_plg_error(ctx->ins, "Failed to attach BPF skeleton");
+        goto cleanup;
+    }
+
+    flb_plg_info(ctx->ins,
+                 "Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` "
+                 "to see output of the BPF programs.");
+
+    ctx->oom_victim_skel = skel;
+
+    return 0;
+
+cleanup:
+    oom_victim_bpf__destroy(skel);
+    ctx->oom_victim_skel = NULL;
+
+    return -1;
+}
 
 static void cb_ebpf_pause(void *data, struct flb_config *config)
 {
@@ -95,6 +137,35 @@ static void cb_ebpf_resume(void *data, struct flb_config *config)
     flb_input_collector_resume(ctx->coll_fd, ctx->ins);
 }
 
+static void print_map(struct bpf_map *map)
+{
+    __u64 lookup_key = -1, next_key;
+    int err, fd = bpf_map__fd(map);
+    __u8 value;
+    __u32 pid;
+
+    while (!bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
+        err = bpf_map_lookup_elem(fd, &next_key, &value);
+        if (err < 0) {
+            flb_error("failed to lookup infos: %d\n", err);
+            return;
+        }
+        pid = next_key >> 32;
+        flb_info("%-8u %-4u\n", pid, value);
+    }
+    flb_info("Hi!");
+
+    lookup_key = -1;
+    while (!bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
+        err = bpf_map_delete_elem(fd, &next_key);
+        if (err < 0) {
+            flb_error("failed to cleanup infos: %d\n", err);
+            return;
+        }
+        lookup_key = next_key;
+    }
+}
+
 static int cb_ebpf_collect(struct flb_input_instance *ins,
                            struct flb_config *config, void *in_context)
 {
@@ -102,6 +173,8 @@ static int cb_ebpf_collect(struct flb_input_instance *ins,
     msgpack_packer mp_pck;
     msgpack_sbuffer mp_sbuf;
     int count = 8;
+
+    print_map(ctx->oom_victim_skel->maps.oomkill);
 
     /* Initialize local msgpack buffer */
     msgpack_sbuffer_init(&mp_sbuf);
@@ -205,9 +278,16 @@ static int cb_ebpf_init(struct flb_input_instance *in,
 
     ret = prepare_vsstat_ebpf(ctx);
     if (ret == -1) {
-        flb_plg_error(ctx->ins, "could not load eBPF program");
+        flb_plg_error(ctx->ins, "could not load eBPF vfsstat program");
         return -1;
     }
+
+    ret = prepare_oom_victim_ebpf(ctx);
+    if (ret == -1) {
+        flb_plg_error(ctx->ins, "could not load eBPF oom_victim program");
+        return -1;
+    }
+
 
     flb_input_set_context(in, ctx);
 
@@ -233,6 +313,10 @@ static int cb_ebpf_exit(void *data, struct flb_config *config)
 
     if (ctx->vfsstat_skel) {
         vfsstat_bpf__destroy(ctx->vfsstat_skel);
+    }
+
+    if (ctx->oom_victim_skel) {
+        oom_victim_bpf__destroy(ctx->oom_victim_skel);
     }
 
     /* done */

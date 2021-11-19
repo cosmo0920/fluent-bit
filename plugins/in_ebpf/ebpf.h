@@ -30,6 +30,7 @@ struct flb_in_ebpf {
     int interval_sec;  /* interval collection time (Second) */
     int interval_nsec; /* interval collection time (Nanosecond) */
     struct vfsstat_bpf *vfsstat_skel;
+    struct oom_victim_bpf *oom_victim_skel;
     struct flb_input_instance *ins;
 };
 
