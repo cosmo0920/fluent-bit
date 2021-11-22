@@ -30,10 +30,13 @@
 #include <bpf/bpf.h>
 #include <msgpack.h>
 #include <sys/resource.h>
-#include "ebpf.h"
+#include <sys/socket.h>
 #include "vfsstat.skel.h"
 #include "vfsstat.h"
 #include "oom_victim.skel.h"
+#include "tcpconnect.skel.h"
+#include "tcpconnect.h"
+#include "ebpf.h"
 
 static int print_libbpf_log(enum libbpf_print_level level, const char *fmt, va_list args)
 {
@@ -117,6 +120,45 @@ static int prepare_oom_victim_ebpf(struct flb_in_ebpf *ctx)
 cleanup:
     oom_victim_bpf__destroy(skel);
     ctx->oom_victim_skel = NULL;
+
+    return -1;
+}
+
+static int prepare_tcpconnect_ebpf(struct flb_in_ebpf *ctx)
+{
+    struct tcpconnect_bpf *skel;
+    int err;
+
+    /* Open BPF application */
+    skel = tcpconnect_bpf__open();
+    if (!skel) {
+        flb_plg_error(ctx->ins, "Failed to open BPF skeleton");
+        return 1;
+    }
+
+    /* Load & verify BPF programs */
+    err = tcpconnect_bpf__load(skel);
+    if (err) {
+        flb_plg_error(ctx->ins, "Failed to load and verify BPF skeleton");
+        goto cleanup;
+    }
+
+    /* Attach tracepoint handler */
+    err = tcpconnect_bpf__attach(skel);
+    if (err) {
+        flb_plg_error(ctx->ins, "Failed to attach BPF skeleton");
+        goto cleanup;
+    }
+
+    flb_plg_info(ctx->ins, "Successfully eBPF tcpconnect started!");
+
+    ctx->tcpconnect_skel = skel;
+
+    return 0;
+
+cleanup:
+    tcpconnect_bpf__destroy(skel);
+    ctx->tcpconnect_skel = NULL;
 
     return -1;
 }
@@ -246,11 +288,122 @@ static int collect_vfsstat(struct flb_input_instance *ins,
     return 0;
 }
 
+static int collect_ipv4_tcpconnect(msgpack_packer *mp_pck,
+                                   struct flb_input_instance *ins,
+                                   struct flb_config *config, void *in_context)
+{
+    struct flb_in_ebpf *ctx = in_context;
+    struct ipv4_flow_key_t key = {};
+    struct ipv4_flow_key_t next_key = {};
+    struct ipv4_flow_key_t remove_key;
+    struct bpf_map *map = ctx->tcpconnect_skel->maps.ipv4_counts;
+    int err;
+    int fd = bpf_map__fd(map);
+    __u64 value;
+    __u32 count = 0;
+
+    while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
+        flb_plg_debug(ctx->ins, "ipv4_tcpconnect lookup err: %d", err);
+        err = bpf_map_lookup_elem(fd, &next_key, &value);
+        if (err < 0) {
+            key = next_key;
+            continue;
+        }
+
+        bpf_map_delete_elem(fd, &remove_key);
+
+        count += value;
+        flb_plg_debug(ctx->ins, "ipv4_tcpconnect count: %d", count);
+        /* Reset value. */
+        value = 0;
+
+        remove_key = key;
+
+        key = next_key;
+    }
+
+    bpf_map_delete_elem(fd, &remove_key);
+
+    msgpack_pack_str(mp_pck, 15);
+    msgpack_pack_str_body(mp_pck, "ipv4.tcpconnect", 15);
+    msgpack_pack_uint32(mp_pck, count);
+
+    return 0;
+}
+
+static int collect_ipv6_tcpconnect(msgpack_packer *mp_pck,
+                                   struct flb_input_instance *ins,
+                                   struct flb_config *config, void *in_context)
+{
+    struct flb_in_ebpf *ctx = in_context;
+    struct ipv6_flow_key_t key = {};
+    struct ipv6_flow_key_t next_key = {};
+    struct ipv6_flow_key_t remove_key;
+    struct bpf_map *map = ctx->tcpconnect_skel->maps.ipv6_counts;
+    int err;
+    int fd = bpf_map__fd(map);
+    __u64 value;
+    __u32 count = 0;
+
+    while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
+        err = bpf_map_lookup_elem(fd, &next_key, &value);
+        flb_plg_debug(ctx->ins, "ipv6_tcpconnect lookup err: %d", err);
+        if (err < 0) {
+            key = next_key;
+            continue;
+        }
+
+        bpf_map_delete_elem(fd, &remove_key);
+
+        count += value;
+        flb_plg_debug(ctx->ins, "ipv6_tcpconnect count: %d", count);
+        /* Reset value. */
+        value = 0;
+
+        remove_key = key;
+
+        key = next_key;
+    }
+
+    bpf_map_delete_elem(fd, &remove_key);
+
+    msgpack_pack_str(mp_pck, 15);
+    msgpack_pack_str_body(mp_pck, "ipv6.tcpconnect", 15);
+    msgpack_pack_uint32(mp_pck, count);
+
+    return 0;
+}
+
+static int collect_tcpconnect(struct flb_input_instance *ins,
+                              struct flb_config *config, void *in_context)
+{
+    msgpack_packer mp_pck;
+    msgpack_sbuffer mp_sbuf;
+
+    /* Initialize local msgpack buffer */
+    msgpack_sbuffer_init(&mp_sbuf);
+    msgpack_packer_init(&mp_pck, &mp_sbuf, msgpack_sbuffer_write);
+
+    msgpack_pack_array(&mp_pck, 2);
+    flb_pack_time_now(&mp_pck);
+
+    msgpack_pack_map(&mp_pck, 2);
+
+    collect_ipv4_tcpconnect(&mp_pck, ins, config, in_context);
+    collect_ipv6_tcpconnect(&mp_pck, ins, config, in_context);
+
+    flb_input_chunk_append_raw(ins, NULL, 0, mp_sbuf.data, mp_sbuf.size);
+    msgpack_sbuffer_destroy(&mp_sbuf);
+
+    return 0;
+}
+
 static int cb_ebpf_collect(struct flb_input_instance *ins,
                            struct flb_config *config, void *in_context)
 {
     collect_oom_victim(ins, config, in_context);
     collect_vfsstat(ins, config, in_context);
+    collect_tcpconnect(ins, config, in_context);
 
     return 0;
 }
@@ -312,6 +465,11 @@ static int cb_ebpf_init(struct flb_input_instance *in,
         return -1;
     }
 
+    ret = prepare_tcpconnect_ebpf(ctx);
+    if (ret == -1) {
+        flb_plg_error(ctx->ins, "could not load eBPF tcpconnect program");
+        return -1;
+    }
 
     flb_input_set_context(in, ctx);
 
@@ -341,6 +499,10 @@ static int cb_ebpf_exit(void *data, struct flb_config *config)
 
     if (ctx->oom_victim_skel) {
         oom_victim_bpf__destroy(ctx->oom_victim_skel);
+    }
+
+    if (ctx->tcpconnect_skel) {
+        tcpconnect_bpf__destroy(ctx->tcpconnect_skel);
     }
 
     /* done */
