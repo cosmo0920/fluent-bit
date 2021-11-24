@@ -111,7 +111,7 @@ macro(bpf_object name input)
   set(OUTPUT_TARGET ${name}_skel)
 
   add_custom_command(OUTPUT ${BPF_O_FILE}
-    COMMAND ${FLB_EBPF_CLANG_EXE} -g -O2 -target bpf -D__TARGET_ARCH_${ARCH}
+    COMMAND ${FLB_EBPF_CLANG_EXE} -g -O2 -target bpf -D__TARGET_ARCH_${ARCH} -D__TARGET_${ACTUAL_ARCH}
     ${CLANG_SYSTEM_INCLUDES} -I${GENERATED_VMLINUX_DIR} -I/usr/include/${ACTUAL_ARCH}-linux-gnu
     -isystem ${LIBBPF_INCLUDE_DIR} -c ${BPF_C_FILE} -o ${BPF_O_FILE}
     COMMENT "[clang] building bpf object: ${name}"

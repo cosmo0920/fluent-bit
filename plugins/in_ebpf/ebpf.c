@@ -36,6 +36,8 @@
 #include "oom_victim.skel.h"
 #include "tcpconnect.skel.h"
 #include "tcpconnect.h"
+#include "shm.skel.h"
+#include "shm.h"
 #include "ebpf.h"
 
 static int print_libbpf_log(enum libbpf_print_level level, const char *fmt, va_list args)
@@ -159,6 +161,45 @@ static int prepare_tcpconnect_ebpf(struct flb_in_ebpf *ctx)
 cleanup:
     tcpconnect_bpf__destroy(skel);
     ctx->tcpconnect_skel = NULL;
+
+    return -1;
+}
+
+static int prepare_shm_ebpf(struct flb_in_ebpf *ctx)
+{
+    struct shm_bpf *skel;
+    int err;
+
+    /* Open BPF application */
+    skel = shm_bpf__open();
+    if (!skel) {
+        flb_plg_error(ctx->ins, "Failed to open BPF skeleton");
+        return 1;
+    }
+
+    /* Load & verify BPF programs */
+    err = shm_bpf__load(skel);
+    if (err) {
+        flb_plg_error(ctx->ins, "Failed to load and verify BPF skeleton");
+        goto cleanup;
+    }
+
+    /* Attach tracepoint handler */
+    err = shm_bpf__attach(skel);
+    if (err) {
+        flb_plg_error(ctx->ins, "Failed to attach BPF skeleton");
+        goto cleanup;
+    }
+
+    flb_plg_info(ctx->ins, "Successfully eBPF shm started!");
+
+    ctx->shm_skel = skel;
+
+    return 0;
+
+cleanup:
+    shm_bpf__destroy(skel);
+    ctx->shm_skel = NULL;
 
     return -1;
 }
@@ -398,12 +439,158 @@ static int collect_tcpconnect(struct flb_input_instance *ins,
     return 0;
 }
 
+static int collect_shm_current_values(msgpack_packer *mp_pck,
+                                      struct flb_input_instance *ins,
+                                      struct flb_config *config, void *in_context)
+{
+    struct flb_in_ebpf *ctx = in_context;
+    __u32 key;
+    __u32 next_key;
+    __u32 remove_key;
+    struct bpf_map *map = ctx->shm_skel->maps.pid_shms;
+    int err;
+    int fd = bpf_map__fd(map);
+    struct flb_shm_t shm = {};
+    struct flb_shm_t total_shm = {};
+
+    __u32 count = 0;
+
+    while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
+        memset(&shm, 0, sizeof(struct flb_shm_t));
+        err = bpf_map_lookup_elem(fd, &next_key, &shm);
+        flb_plg_debug(ctx->ins, "pid_shms lookup err: %d", err);
+        if (err < 0) {
+            key = next_key;
+            continue;
+        }
+
+        total_shm.get += shm.get;
+        total_shm.at  += shm.at;
+        total_shm.dt  += shm.dt;
+        total_shm.ctl += shm.ctl;
+
+        /* Reset values*/
+        shm.get = 0;
+        shm.at  = 0;
+        shm.dt  = 0;
+        shm.ctl = 0;
+
+        bpf_map_delete_elem(fd, &remove_key);
+
+        count++;
+        flb_plg_debug(ctx->ins, "pid_shms count: %d", count);
+
+        remove_key = key;
+
+        key = next_key;
+    }
+
+    bpf_map_delete_elem(fd, &remove_key);
+
+    msgpack_pack_str(mp_pck, 6);
+    msgpack_pack_str_body(mp_pck, "shmget", 6);
+    msgpack_pack_uint32(mp_pck, total_shm.get);
+
+    msgpack_pack_str(mp_pck, 5);
+    msgpack_pack_str_body(mp_pck, "shmat", 5);
+    msgpack_pack_uint32(mp_pck, total_shm.at);
+
+    msgpack_pack_str(mp_pck, 5);
+    msgpack_pack_str_body(mp_pck, "shmdt", 5);
+    msgpack_pack_uint32(mp_pck, total_shm.dt);
+
+    msgpack_pack_str(mp_pck, 6);
+    msgpack_pack_str_body(mp_pck, "shmctl", 6);
+    msgpack_pack_uint32(mp_pck, total_shm.ctl);
+
+    return 0;
+}
+
+static int collect_shm_cumulative_values(msgpack_packer *mp_pck,
+                                         struct flb_input_instance *ins,
+                                         struct flb_config *config, void *in_context)
+{
+    struct flb_in_ebpf *ctx = in_context;
+    struct bpf_map *map = ctx->shm_skel->maps.shm_counts;
+    int fd = bpf_map__fd(map);
+    uint32_t kind = 0;
+    uint64_t counts = 0;
+    struct flb_shm_t kind_stats = {};
+
+    for (kind = 0; kind < __FLB_SHM_SYSCALL_END; kind++) {
+        counts = 0;
+        if (!bpf_map_lookup_elem(fd, &kind, &counts));
+
+        switch (kind) {
+        case FLB_SHM_GET_SYSCALL:
+            kind_stats.get = counts;
+            break;
+        case FLB_SHM_AT_SYSCALL:
+            kind_stats.at = counts;
+            break;
+        case FLB_SHM_DT_SYSCALL:
+            kind_stats.dt = counts;
+            break;
+        case FLB_SHM_CTL_SYSCALL:
+            kind_stats.ctl = counts;
+            break;
+        }
+    }
+
+    /* shmget (cumulative) */
+    msgpack_pack_str(mp_pck, 13);
+    msgpack_pack_str_body(mp_pck, "shmget.called", 13);
+    msgpack_pack_uint64(mp_pck, kind_stats.get);
+
+    /* shmat (cumulative) */
+    msgpack_pack_str(mp_pck, 12);
+    msgpack_pack_str_body(mp_pck, "shmat.called", 12);
+    msgpack_pack_uint64(mp_pck, kind_stats.at);
+
+    /* shmdt (cumulative) */
+    msgpack_pack_str(mp_pck, 12);
+    msgpack_pack_str_body(mp_pck, "shmdt.called", 12);
+    msgpack_pack_uint64(mp_pck, kind_stats.dt);
+
+    /* shmctl (cumulative) */
+    msgpack_pack_str(mp_pck, 13);
+    msgpack_pack_str_body(mp_pck, "shmctl.called", 13);
+    msgpack_pack_uint64(mp_pck, kind_stats.ctl);
+
+    return 0;
+}
+
+static int collect_shm(struct flb_input_instance *ins,
+                       struct flb_config *config, void *in_context)
+{
+    msgpack_packer mp_pck;
+    msgpack_sbuffer mp_sbuf;
+
+    /* Initialize local msgpack buffer */
+    msgpack_sbuffer_init(&mp_sbuf);
+    msgpack_packer_init(&mp_pck, &mp_sbuf, msgpack_sbuffer_write);
+
+    msgpack_pack_array(&mp_pck, 2);
+    flb_pack_time_now(&mp_pck);
+
+    msgpack_pack_map(&mp_pck, 8);
+
+    collect_shm_current_values(&mp_pck, ins, config, in_context);
+    collect_shm_cumulative_values(&mp_pck, ins, config, in_context);
+
+    flb_input_chunk_append_raw(ins, NULL, 0, mp_sbuf.data, mp_sbuf.size);
+    msgpack_sbuffer_destroy(&mp_sbuf);
+
+    return 0;
+}
+
 static int cb_ebpf_collect(struct flb_input_instance *ins,
                            struct flb_config *config, void *in_context)
 {
     collect_oom_victim(ins, config, in_context);
     collect_vfsstat(ins, config, in_context);
     collect_tcpconnect(ins, config, in_context);
+    collect_shm(ins, config, in_context);
 
     return 0;
 }
@@ -471,6 +658,12 @@ static int cb_ebpf_init(struct flb_input_instance *in,
         return -1;
     }
 
+    ret = prepare_shm_ebpf(ctx);
+    if (ret == -1) {
+        flb_plg_error(ctx->ins, "could not load eBPF tcpconnect program");
+        return -1;
+    }
+
     flb_input_set_context(in, ctx);
 
     ret = flb_input_set_collector_time(in,
@@ -503,6 +696,10 @@ static int cb_ebpf_exit(void *data, struct flb_config *config)
 
     if (ctx->tcpconnect_skel) {
         tcpconnect_bpf__destroy(ctx->tcpconnect_skel);
+    }
+
+    if (ctx->shm_skel) {
+        shm_bpf__destroy(ctx->shm_skel);
     }
 
     /* done */

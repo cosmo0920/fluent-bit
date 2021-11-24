@@ -32,6 +32,7 @@ struct flb_in_ebpf {
     struct vfsstat_bpf *vfsstat_skel;
     struct oom_victim_bpf *oom_victim_skel;
     struct tcpconnect_bpf *tcpconnect_skel;
+    struct shm_bpf *shm_skel;
     struct flb_input_instance *ins;
 };
 
