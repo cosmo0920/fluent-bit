@@ -21,6 +21,17 @@
 #ifndef VFSSTAT_H
 #define VFSSTAT_H
 
+struct flb_vfsstat_t {
+    __u64 read;
+    __u64 write;
+    __u64 fsync;
+    __u64 open;
+    __u64 create;
+    __u64 unlink;
+    __u64 truncate;
+    __u64 fallocate;
+};
+
 enum flb_vfsstat_types {
     FLB_S_READ,
     FLB_S_WRITE,

@@ -1,19 +1,39 @@
 /* This program is based on vfsstat.py on bcc repo and extended:
  *  https://github.com/iovisor/bcc/blob/master/tools/vfsstat.py
  */
+/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
+
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
+#include "flb_ebpf_helper.h"
 #include "vfsstat.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, __FLB_S_MAXSTAT);
+    __type(key, __u32);
+    __type(value, __u64);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
+} vfs_counts SEC(".maps");
 
 __u64 stats[__FLB_S_MAXSTAT] = {};
 
 static __always_inline int increment_stats(int key)
 {
-    __atomic_add_fetch(&stats[key], 1, __ATOMIC_RELAXED);
+    __u64 start = 1;
+    __u64 *val;
+
+    val = bpf_map_lookup_elem(&vfs_counts, &key);
+    if (val) {
+        flb__update_u64(val, 1);
+    } else {
+        bpf_map_update_elem(&vfs_counts, &key, &start, BPF_ANY);
+    }
+
     return 0;
 }
 

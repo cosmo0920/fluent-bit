@@ -270,9 +270,46 @@ static int collect_vfsstat(struct flb_input_instance *ins,
                            struct flb_config *config, void *in_context)
 {
     struct flb_in_ebpf *ctx = in_context;
+    struct bpf_map *map = ctx->vfsstat_skel->maps.vfs_counts;
+    int fd = bpf_map__fd(map);
+    uint32_t kind = 0;
+    uint64_t counts = 0;
+    struct flb_vfsstat_t kind_stats = {};
     msgpack_packer mp_pck;
     msgpack_sbuffer mp_sbuf;
     int count = 8;
+
+    for (kind = 0; kind < __FLB_S_MAXSTAT; kind++) {
+        counts = 0;
+        if (!bpf_map_lookup_elem(fd, &kind, &counts));
+
+        switch (kind) {
+        case FLB_S_READ:
+            kind_stats.read = counts;
+            break;
+        case FLB_S_WRITE:
+            kind_stats.write = counts;
+            break;
+        case FLB_S_FSYNC:
+            kind_stats.fsync = counts;
+            break;
+        case FLB_S_OPEN:
+            kind_stats.open = counts;
+            break;
+        case FLB_S_CREATE:
+            kind_stats.create = counts;
+            break;
+        case FLB_S_UNLINK:
+            kind_stats.unlink = counts;
+            break;
+        case FLB_S_TRUNCATE:
+            kind_stats.truncate = counts;
+            break;
+        case FLB_S_FALLOCATE:
+            kind_stats.fallocate = counts;
+            break;
+        }
+    }
 
     /* Initialize local msgpack buffer */
     msgpack_sbuffer_init(&mp_sbuf);
@@ -286,42 +323,42 @@ static int collect_vfsstat(struct flb_input_instance *ins,
     /* vfs_read */
     msgpack_pack_str(&mp_pck, 8);
     msgpack_pack_str_body(&mp_pck, "vfs_read", 8);
-    msgpack_pack_uint64(&mp_pck, ctx->vfsstat_skel->bss->stats[FLB_S_READ]);
+    msgpack_pack_uint64(&mp_pck, kind_stats.read);
 
     /* vfs_write */
     msgpack_pack_str(&mp_pck, 9);
     msgpack_pack_str_body(&mp_pck, "vfs_write", 9);
-    msgpack_pack_uint64(&mp_pck, ctx->vfsstat_skel->bss->stats[FLB_S_WRITE]);
+    msgpack_pack_uint64(&mp_pck, kind_stats.write);
 
     /* vfs_fsync */
     msgpack_pack_str(&mp_pck, 9);
     msgpack_pack_str_body(&mp_pck, "vfs_fsync", 9);
-    msgpack_pack_uint64(&mp_pck, ctx->vfsstat_skel->bss->stats[FLB_S_FSYNC]);
+    msgpack_pack_uint64(&mp_pck, kind_stats.fsync);
 
     /* vfs_open */
     msgpack_pack_str(&mp_pck, 8);
     msgpack_pack_str_body(&mp_pck, "vfs_open", 8);
-    msgpack_pack_uint64(&mp_pck, ctx->vfsstat_skel->bss->stats[FLB_S_OPEN]);
+    msgpack_pack_uint64(&mp_pck, kind_stats.open);
 
     /* vfs_create */
     msgpack_pack_str(&mp_pck, 10);
     msgpack_pack_str_body(&mp_pck, "vfs_create", 10);
-    msgpack_pack_uint64(&mp_pck, ctx->vfsstat_skel->bss->stats[FLB_S_CREATE]);
+    msgpack_pack_uint64(&mp_pck, kind_stats.create);
 
     /* vfs_unlink */
     msgpack_pack_str(&mp_pck, 10);
     msgpack_pack_str_body(&mp_pck, "vfs_unlink", 10);
-    msgpack_pack_uint64(&mp_pck, ctx->vfsstat_skel->bss->stats[FLB_S_UNLINK]);
+    msgpack_pack_uint64(&mp_pck, kind_stats.unlink);
 
     /* vfs_truncate */
     msgpack_pack_str(&mp_pck, 12);
     msgpack_pack_str_body(&mp_pck, "vfs_truncate", 12);
-    msgpack_pack_uint64(&mp_pck, ctx->vfsstat_skel->bss->stats[FLB_S_TRUNCATE]);
+    msgpack_pack_uint64(&mp_pck, kind_stats.truncate);
 
     /* vfs_fallocate */
     msgpack_pack_str(&mp_pck, 13);
     msgpack_pack_str_body(&mp_pck, "vfs_fallocate", 13);
-    msgpack_pack_uint64(&mp_pck, ctx->vfsstat_skel->bss->stats[FLB_S_FALLOCATE]);
+    msgpack_pack_uint64(&mp_pck, kind_stats.fallocate);
 
     flb_input_chunk_append_raw(ins, NULL, 0, mp_sbuf.data, mp_sbuf.size);
     msgpack_sbuffer_destroy(&mp_sbuf);
