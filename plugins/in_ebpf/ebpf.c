@@ -640,7 +640,6 @@ static int cb_ebpf_init(struct flb_input_instance *in,
     (void) config;
     (void) data;
     int ret;
-    const char *pval = NULL;
 
     ctx = flb_calloc(1, sizeof(struct flb_in_ebpf));
     if (!ctx) {
@@ -648,15 +647,13 @@ static int cb_ebpf_init(struct flb_input_instance *in,
         return -1;
     }
     ctx->ins = in;
-    /* Collection time setting */
-    pval = flb_input_get_property("interval_sec", in);
-    if (pval != NULL && atoi(pval) > 0) {
-        ctx->interval_sec = atoi(pval);
+
+    /* Load the config map */
+    ret = flb_input_config_map_set(in, (void *) ctx);
+    if (ret == -1) {
+        flb_free(ctx);
+        return -1;
     }
-    else {
-        ctx->interval_sec = DEFAULT_INTERVAL_SEC;
-    }
-    ctx->interval_nsec = DEFAULT_INTERVAL_NSEC;
 
     if (ctx->interval_sec <= 0 && ctx->interval_nsec <= 0) {
         /* Illegal configuration should be override. */
@@ -745,6 +742,22 @@ static int cb_ebpf_exit(void *data, struct flb_config *config)
     return 0;
 }
 
+/* Configuration properties map */
+static struct flb_config_map config_map[] = {
+    {
+        FLB_CONFIG_MAP_INT, "interval_sec", "5",
+        0, FLB_TRUE, offsetof(struct flb_in_ebpf, interval_sec),
+        "Interval for polling eBPF information"
+    },
+    {
+        FLB_CONFIG_MAP_INT, "interval_nsec", "0",
+        0, FLB_TRUE, offsetof(struct flb_in_ebpf, interval_nsec),
+        "Interval for polling eBPF information (nanosecond part)"
+    },
+    /* EOF */
+    {0}
+};
+
 struct flb_input_plugin in_ebpf_plugin = {
     .name         = "ebpf",
     .description  = "Handle eBPF programs to monitoring Linux Kernel events",
@@ -755,5 +768,6 @@ struct flb_input_plugin in_ebpf_plugin = {
     .cb_pause     = cb_ebpf_pause,
     .cb_resume    = cb_ebpf_resume,
     .cb_exit      = cb_ebpf_exit,
+    .config_map   = config_map,
     .flags        = 0
 };
