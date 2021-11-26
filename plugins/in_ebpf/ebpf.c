@@ -25,6 +25,8 @@
 #include <fluent-bit/flb_input_plugin.h>
 #include <fluent-bit/flb_config.h>
 #include <fluent-bit/flb_pack.h>
+#include <cmetrics/cmt_counter.h>
+#include <cmetrics/cmt_gauge.h>
 
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
@@ -78,6 +80,55 @@ static int prepare_vsstat_ebpf(struct flb_in_ebpf *ctx)
 
     ctx->vfsstat_skel = skel;
 
+    /* Prepare CMetrics metric */
+    ctx->vfs_read = cmt_counter_create(ctx->cmt, "ebpf", "vfs", "read",
+                                       "The number of calls for vfs read syscall", 0, NULL);
+    if (ctx->vfs_read == NULL) {
+        return -1;
+    }
+
+    ctx->vfs_write = cmt_counter_create(ctx->cmt, "ebpf", "vfs", "write",
+                                       "The number of calls for vfs write syscall", 0, NULL);
+    if (ctx->vfs_write == NULL) {
+        return -1;
+    }
+
+    ctx->vfs_fsync = cmt_counter_create(ctx->cmt, "ebpf", "vfs", "fsync",
+                                       "The number of calls for vfs fsync syscall", 0, NULL);
+    if (ctx->vfs_fsync == NULL) {
+        return -1;
+    }
+
+    ctx->vfs_open = cmt_counter_create(ctx->cmt, "ebpf", "vfs", "open",
+                                       "The number of calls for vfs open syscall", 0, NULL);
+    if (ctx->vfs_open == NULL) {
+        return -1;
+    }
+
+    ctx->vfs_create = cmt_counter_create(ctx->cmt, "ebpf", "vfs", "create",
+                                         "The number of calls for vfs create syscall", 0, NULL);
+    if (ctx->vfs_create == NULL) {
+        return -1;
+    }
+
+    ctx->vfs_unlink = cmt_counter_create(ctx->cmt, "ebpf", "vfs", "unlink",
+                                         "The number of calls for vfs unlink syscall", 0, NULL);
+    if (ctx->vfs_unlink == NULL) {
+        return -1;
+    }
+
+    ctx->vfs_truncate = cmt_counter_create(ctx->cmt, "ebpf", "vfs", "truncate",
+                                           "The number of calls for vfs truncate syscall", 0, NULL);
+    if (ctx->vfs_unlink == NULL) {
+        return -1;
+    }
+
+    ctx->vfs_fallocate = cmt_counter_create(ctx->cmt, "ebpf", "vfs", "fallocate",
+                                            "The number of calls for vfs fallocate syscall", 0, NULL);
+    if (ctx->vfs_fallocate == NULL) {
+        return -1;
+    }
+
     return 0;
 
 cleanup:
@@ -116,6 +167,13 @@ static int prepare_oom_victim_ebpf(struct flb_in_ebpf *ctx)
     flb_plg_info(ctx->ins, "Successfully eBPF oom_victim started!");
 
     ctx->oom_victim_skel = skel;
+
+    /* Prepare CMetrics metric */
+    ctx->oom_victim = cmt_counter_create(ctx->cmt, "ebpf", "oom", "victims",
+                                         "The number of OOM victim processes", 0, NULL);
+    if (ctx->oom_victim == NULL) {
+        return -1;
+    }
 
     return 0;
 
@@ -156,6 +214,19 @@ static int prepare_tcpconnect_ebpf(struct flb_in_ebpf *ctx)
 
     ctx->tcpconnect_skel = skel;
 
+    /* Prepare CMetrics metric */
+    ctx->ipv4_tcpconnect = cmt_gauge_create(ctx->cmt, "ebpf", "tcp", "ipv4 connections",
+                                            "The number of IPv4 TCP connections", 0, NULL);
+    if (ctx->ipv4_tcpconnect == NULL) {
+        return -1;
+    }
+
+    ctx->ipv6_tcpconnect = cmt_gauge_create(ctx->cmt, "ebpf", "tcp", "ipv6 connections",
+                                            "The number of IPv6 TCP connections", 0, NULL);
+    if (ctx->ipv6_tcpconnect == NULL) {
+        return -1;
+    }
+
     return 0;
 
 cleanup:
@@ -195,6 +266,55 @@ static int prepare_shm_ebpf(struct flb_in_ebpf *ctx)
 
     ctx->shm_skel = skel;
 
+    /* Prepare CMetrics metric */
+    ctx->shmget_total = cmt_counter_create(ctx->cmt, "ebpf", "shared_memory", "shmget_total",
+                                           "The number of shmget called counts", 0, NULL);
+    if (ctx->shmget_total == NULL) {
+        return -1;
+    }
+
+    ctx->shmat_total = cmt_counter_create(ctx->cmt, "ebpf", "shared_memory", "shmat_total",
+                                          "The number of shmat called counts", 0, NULL);
+    if (ctx->shmat_total == NULL) {
+        return -1;
+    }
+
+    ctx->shmdt_total = cmt_counter_create(ctx->cmt, "ebpf", "shared_memory", "shmdt_total",
+                                          "The number of shmdt called counts", 0, NULL);
+    if (ctx->shmat_total == NULL) {
+        return -1;
+    }
+
+    ctx->shmctl_total = cmt_counter_create(ctx->cmt, "ebpf", "shared_memory", "shmctl_total",
+                                          "The number of shmctl called counts", 0, NULL);
+    if (ctx->shmat_total == NULL) {
+        return -1;
+    }
+
+    ctx->shmget = cmt_gauge_create(ctx->cmt, "ebpf", "shared_memory", "shmget",
+                                   "The current number of shmget called counts", 0, NULL);
+    if (ctx->shmget == NULL) {
+        return -1;
+    }
+
+    ctx->shmat = cmt_gauge_create(ctx->cmt, "ebpf", "shared_memory", "shmat",
+                                   "The current number of shmat called counts", 0, NULL);
+    if (ctx->shmat == NULL) {
+        return -1;
+    }
+
+    ctx->shmdt = cmt_gauge_create(ctx->cmt, "ebpf", "shared_memory", "shmdt",
+                                   "The current number of shmdt called counts", 0, NULL);
+    if (ctx->shmdt == NULL) {
+        return -1;
+    }
+
+    ctx->shmctl = cmt_gauge_create(ctx->cmt, "ebpf", "shared_memory", "shmctl",
+                                   "The current number of shmctl called counts", 0, NULL);
+    if (ctx->shmctl == NULL) {
+        return -1;
+    }
+
     return 0;
 
 cleanup:
@@ -220,22 +340,15 @@ static int collect_oom_victim(struct flb_input_instance *ins,
                               struct flb_config *config, void *in_context)
 {
     struct flb_in_ebpf *ctx = in_context;
+    struct bpf_map *map = ctx->oom_victim_skel->maps.oomkill;
+
     __u64 key = -1;
     __u64 next_key;
     __u64 remove_key;
-    struct bpf_map *map = ctx->oom_victim_skel->maps.oomkill;
     int err, fd = bpf_map__fd(map);
     __u8 value;
-    msgpack_packer mp_pck;
-    msgpack_sbuffer mp_sbuf;
     __u32 count = 0;
-
-    /* Initialize local msgpack buffer */
-    msgpack_sbuffer_init(&mp_sbuf);
-    msgpack_packer_init(&mp_pck, &mp_sbuf, msgpack_sbuffer_write);
-
-    msgpack_pack_array(&mp_pck, 2);
-    flb_pack_time_now(&mp_pck);
+    uint64_t ts = cmt_time_now();
 
     while (!bpf_map_get_next_key(fd, &key, &next_key)) {
         err = bpf_map_lookup_elem(fd, &next_key, &value);
@@ -254,14 +367,7 @@ static int collect_oom_victim(struct flb_input_instance *ins,
     }
     bpf_map_delete_elem(fd, &remove_key);
 
-    msgpack_pack_map(&mp_pck, 1);
-
-    msgpack_pack_str(&mp_pck, 10);
-    msgpack_pack_str_body(&mp_pck, "oom_victim", 10);
-    msgpack_pack_uint32(&mp_pck, count);
-
-    flb_input_chunk_append_raw(ins, NULL, 0, mp_sbuf.data, mp_sbuf.size);
-    msgpack_sbuffer_destroy(&mp_sbuf);
+    cmt_counter_set(ctx->oom_victim, ts, (double)count, 0, NULL);
 
     return 0;
 }
@@ -275,9 +381,7 @@ static int collect_vfsstat(struct flb_input_instance *ins,
     uint32_t kind = 0;
     uint64_t counts = 0;
     struct flb_vfsstat_t kind_stats = {};
-    msgpack_packer mp_pck;
-    msgpack_sbuffer mp_sbuf;
-    int count = 8;
+    uint64_t ts = cmt_time_now();
 
     for (kind = 0; kind < __FLB_S_MAXSTAT; kind++) {
         counts = 0;
@@ -311,63 +415,19 @@ static int collect_vfsstat(struct flb_input_instance *ins,
         }
     }
 
-    /* Initialize local msgpack buffer */
-    msgpack_sbuffer_init(&mp_sbuf);
-    msgpack_packer_init(&mp_pck, &mp_sbuf, msgpack_sbuffer_write);
-
-    msgpack_pack_array(&mp_pck, 2);
-    flb_pack_time_now(&mp_pck);
-
-    msgpack_pack_map(&mp_pck, count);
-
-    /* vfs_read */
-    msgpack_pack_str(&mp_pck, 8);
-    msgpack_pack_str_body(&mp_pck, "vfs_read", 8);
-    msgpack_pack_uint64(&mp_pck, kind_stats.read);
-
-    /* vfs_write */
-    msgpack_pack_str(&mp_pck, 9);
-    msgpack_pack_str_body(&mp_pck, "vfs_write", 9);
-    msgpack_pack_uint64(&mp_pck, kind_stats.write);
-
-    /* vfs_fsync */
-    msgpack_pack_str(&mp_pck, 9);
-    msgpack_pack_str_body(&mp_pck, "vfs_fsync", 9);
-    msgpack_pack_uint64(&mp_pck, kind_stats.fsync);
-
-    /* vfs_open */
-    msgpack_pack_str(&mp_pck, 8);
-    msgpack_pack_str_body(&mp_pck, "vfs_open", 8);
-    msgpack_pack_uint64(&mp_pck, kind_stats.open);
-
-    /* vfs_create */
-    msgpack_pack_str(&mp_pck, 10);
-    msgpack_pack_str_body(&mp_pck, "vfs_create", 10);
-    msgpack_pack_uint64(&mp_pck, kind_stats.create);
-
-    /* vfs_unlink */
-    msgpack_pack_str(&mp_pck, 10);
-    msgpack_pack_str_body(&mp_pck, "vfs_unlink", 10);
-    msgpack_pack_uint64(&mp_pck, kind_stats.unlink);
-
-    /* vfs_truncate */
-    msgpack_pack_str(&mp_pck, 12);
-    msgpack_pack_str_body(&mp_pck, "vfs_truncate", 12);
-    msgpack_pack_uint64(&mp_pck, kind_stats.truncate);
-
-    /* vfs_fallocate */
-    msgpack_pack_str(&mp_pck, 13);
-    msgpack_pack_str_body(&mp_pck, "vfs_fallocate", 13);
-    msgpack_pack_uint64(&mp_pck, kind_stats.fallocate);
-
-    flb_input_chunk_append_raw(ins, NULL, 0, mp_sbuf.data, mp_sbuf.size);
-    msgpack_sbuffer_destroy(&mp_sbuf);
+    cmt_counter_set(ctx->vfs_read, ts, (double)kind_stats.read, 0, NULL);
+    cmt_counter_set(ctx->vfs_write, ts, (double)kind_stats.write, 0, NULL);
+    cmt_counter_set(ctx->vfs_fsync, ts, (double)kind_stats.fsync, 0, NULL);
+    cmt_counter_set(ctx->vfs_open, ts, (double)kind_stats.open, 0, NULL);
+    cmt_counter_set(ctx->vfs_create, ts, (double)kind_stats.create, 0, NULL);
+    cmt_counter_set(ctx->vfs_unlink, ts, (double)kind_stats.unlink, 0, NULL);
+    cmt_counter_set(ctx->vfs_truncate, ts, (double)kind_stats.truncate, 0, NULL);
+    cmt_counter_set(ctx->vfs_fallocate, ts, (double)kind_stats.fallocate, 0, NULL);
 
     return 0;
 }
 
-static int collect_ipv4_tcpconnect(msgpack_packer *mp_pck,
-                                   struct flb_input_instance *ins,
+static int collect_ipv4_tcpconnect(struct flb_input_instance *ins,
                                    struct flb_config *config, void *in_context)
 {
     struct flb_in_ebpf *ctx = in_context;
@@ -379,6 +439,7 @@ static int collect_ipv4_tcpconnect(msgpack_packer *mp_pck,
     int fd = bpf_map__fd(map);
     __u64 value;
     __u32 count = 0;
+    uint64_t ts = cmt_time_now();
 
     while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
         flb_plg_debug(ctx->ins, "ipv4_tcpconnect lookup err: %d", err);
@@ -402,15 +463,12 @@ static int collect_ipv4_tcpconnect(msgpack_packer *mp_pck,
 
     bpf_map_delete_elem(fd, &remove_key);
 
-    msgpack_pack_str(mp_pck, 15);
-    msgpack_pack_str_body(mp_pck, "ipv4.tcpconnect", 15);
-    msgpack_pack_uint32(mp_pck, count);
+    cmt_gauge_set(ctx->ipv4_tcpconnect, ts, (double)count, 0, NULL);
 
     return 0;
 }
 
-static int collect_ipv6_tcpconnect(msgpack_packer *mp_pck,
-                                   struct flb_input_instance *ins,
+static int collect_ipv6_tcpconnect(struct flb_input_instance *ins,
                                    struct flb_config *config, void *in_context)
 {
     struct flb_in_ebpf *ctx = in_context;
@@ -422,6 +480,7 @@ static int collect_ipv6_tcpconnect(msgpack_packer *mp_pck,
     int fd = bpf_map__fd(map);
     __u64 value;
     __u32 count = 0;
+    uint64_t ts = cmt_time_now();
 
     while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
         err = bpf_map_lookup_elem(fd, &next_key, &value);
@@ -445,9 +504,7 @@ static int collect_ipv6_tcpconnect(msgpack_packer *mp_pck,
 
     bpf_map_delete_elem(fd, &remove_key);
 
-    msgpack_pack_str(mp_pck, 15);
-    msgpack_pack_str_body(mp_pck, "ipv6.tcpconnect", 15);
-    msgpack_pack_uint32(mp_pck, count);
+    cmt_gauge_set(ctx->ipv6_tcpconnect, ts, (double)count, 0, NULL);
 
     return 0;
 }
@@ -455,42 +512,27 @@ static int collect_ipv6_tcpconnect(msgpack_packer *mp_pck,
 static int collect_tcpconnect(struct flb_input_instance *ins,
                               struct flb_config *config, void *in_context)
 {
-    msgpack_packer mp_pck;
-    msgpack_sbuffer mp_sbuf;
-
-    /* Initialize local msgpack buffer */
-    msgpack_sbuffer_init(&mp_sbuf);
-    msgpack_packer_init(&mp_pck, &mp_sbuf, msgpack_sbuffer_write);
-
-    msgpack_pack_array(&mp_pck, 2);
-    flb_pack_time_now(&mp_pck);
-
-    msgpack_pack_map(&mp_pck, 2);
-
-    collect_ipv4_tcpconnect(&mp_pck, ins, config, in_context);
-    collect_ipv6_tcpconnect(&mp_pck, ins, config, in_context);
-
-    flb_input_chunk_append_raw(ins, NULL, 0, mp_sbuf.data, mp_sbuf.size);
-    msgpack_sbuffer_destroy(&mp_sbuf);
+    collect_ipv4_tcpconnect(ins, config, in_context);
+    collect_ipv6_tcpconnect(ins, config, in_context);
 
     return 0;
 }
 
-static int collect_shm_current_values(msgpack_packer *mp_pck,
-                                      struct flb_input_instance *ins,
+static int collect_shm_current_values(struct flb_input_instance *ins,
                                       struct flb_config *config, void *in_context)
 {
     struct flb_in_ebpf *ctx = in_context;
+    struct bpf_map *map = ctx->shm_skel->maps.pid_shms;
     __u32 key;
     __u32 next_key;
     __u32 remove_key;
-    struct bpf_map *map = ctx->shm_skel->maps.pid_shms;
     int err;
     int fd = bpf_map__fd(map);
     struct flb_shm_t shm = {};
     struct flb_shm_t total_shm = {};
 
     __u32 count = 0;
+    uint64_t ts = cmt_time_now();
 
     while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
         memset(&shm, 0, sizeof(struct flb_shm_t));
@@ -524,27 +566,15 @@ static int collect_shm_current_values(msgpack_packer *mp_pck,
 
     bpf_map_delete_elem(fd, &remove_key);
 
-    msgpack_pack_str(mp_pck, 6);
-    msgpack_pack_str_body(mp_pck, "shmget", 6);
-    msgpack_pack_uint32(mp_pck, total_shm.get);
-
-    msgpack_pack_str(mp_pck, 5);
-    msgpack_pack_str_body(mp_pck, "shmat", 5);
-    msgpack_pack_uint32(mp_pck, total_shm.at);
-
-    msgpack_pack_str(mp_pck, 5);
-    msgpack_pack_str_body(mp_pck, "shmdt", 5);
-    msgpack_pack_uint32(mp_pck, total_shm.dt);
-
-    msgpack_pack_str(mp_pck, 6);
-    msgpack_pack_str_body(mp_pck, "shmctl", 6);
-    msgpack_pack_uint32(mp_pck, total_shm.ctl);
+    cmt_gauge_set(ctx->shmget, ts, (double)total_shm.get, 0, NULL);
+    cmt_gauge_set(ctx->shmat, ts, (double)total_shm.at, 0, NULL);
+    cmt_gauge_set(ctx->shmdt, ts, (double)total_shm.dt, 0, NULL);
+    cmt_gauge_set(ctx->shmctl, ts, (double)total_shm.ctl, 0, NULL);
 
     return 0;
 }
 
-static int collect_shm_cumulative_values(msgpack_packer *mp_pck,
-                                         struct flb_input_instance *ins,
+static int collect_shm_cumulative_values(struct flb_input_instance *ins,
                                          struct flb_config *config, void *in_context)
 {
     struct flb_in_ebpf *ctx = in_context;
@@ -553,6 +583,7 @@ static int collect_shm_cumulative_values(msgpack_packer *mp_pck,
     uint32_t kind = 0;
     uint64_t counts = 0;
     struct flb_shm_t kind_stats = {};
+    uint64_t ts = cmt_time_now();
 
     for (kind = 0; kind < __FLB_SHM_SYSCALL_END; kind++) {
         counts = 0;
@@ -574,25 +605,10 @@ static int collect_shm_cumulative_values(msgpack_packer *mp_pck,
         }
     }
 
-    /* shmget (cumulative) */
-    msgpack_pack_str(mp_pck, 13);
-    msgpack_pack_str_body(mp_pck, "shmget.called", 13);
-    msgpack_pack_uint64(mp_pck, kind_stats.get);
-
-    /* shmat (cumulative) */
-    msgpack_pack_str(mp_pck, 12);
-    msgpack_pack_str_body(mp_pck, "shmat.called", 12);
-    msgpack_pack_uint64(mp_pck, kind_stats.at);
-
-    /* shmdt (cumulative) */
-    msgpack_pack_str(mp_pck, 12);
-    msgpack_pack_str_body(mp_pck, "shmdt.called", 12);
-    msgpack_pack_uint64(mp_pck, kind_stats.dt);
-
-    /* shmctl (cumulative) */
-    msgpack_pack_str(mp_pck, 13);
-    msgpack_pack_str_body(mp_pck, "shmctl.called", 13);
-    msgpack_pack_uint64(mp_pck, kind_stats.ctl);
+    cmt_counter_set(ctx->shmget_total, ts, (double)kind_stats.get, 0, NULL);
+    cmt_counter_set(ctx->shmat_total, ts, (double)kind_stats.at, 0, NULL);
+    cmt_counter_set(ctx->shmdt_total, ts, (double)kind_stats.dt, 0, NULL);
+    cmt_counter_set(ctx->shmctl_total, ts, (double)kind_stats.ctl, 0, NULL);
 
     return 0;
 }
@@ -600,23 +616,8 @@ static int collect_shm_cumulative_values(msgpack_packer *mp_pck,
 static int collect_shm(struct flb_input_instance *ins,
                        struct flb_config *config, void *in_context)
 {
-    msgpack_packer mp_pck;
-    msgpack_sbuffer mp_sbuf;
-
-    /* Initialize local msgpack buffer */
-    msgpack_sbuffer_init(&mp_sbuf);
-    msgpack_packer_init(&mp_pck, &mp_sbuf, msgpack_sbuffer_write);
-
-    msgpack_pack_array(&mp_pck, 2);
-    flb_pack_time_now(&mp_pck);
-
-    msgpack_pack_map(&mp_pck, 8);
-
-    collect_shm_current_values(&mp_pck, ins, config, in_context);
-    collect_shm_cumulative_values(&mp_pck, ins, config, in_context);
-
-    flb_input_chunk_append_raw(ins, NULL, 0, mp_sbuf.data, mp_sbuf.size);
-    msgpack_sbuffer_destroy(&mp_sbuf);
+    collect_shm_current_values(ins, config, in_context);
+    collect_shm_cumulative_values(ins, config, in_context);
 
     return 0;
 }
@@ -624,10 +625,18 @@ static int collect_shm(struct flb_input_instance *ins,
 static int cb_ebpf_collect(struct flb_input_instance *ins,
                            struct flb_config *config, void *in_context)
 {
+    struct flb_in_ebpf *ctx = in_context;
+    int ret = -1;
+
     collect_oom_victim(ins, config, in_context);
     collect_vfsstat(ins, config, in_context);
     collect_tcpconnect(ins, config, in_context);
     collect_shm(ins, config, in_context);
+
+    ret = flb_input_metrics_append(ins, NULL, 0, ctx->cmt);
+    if (ret != 0) {
+        flb_plg_error(ins, "could not append metrics");
+    }
 
     return 0;
 }
@@ -651,6 +660,14 @@ static int cb_ebpf_init(struct flb_input_instance *in,
     /* Load the config map */
     ret = flb_input_config_map_set(in, (void *) ctx);
     if (ret == -1) {
+        flb_free(ctx);
+        return -1;
+    }
+
+    /* Initialize CMetrics */
+    ctx->cmt = cmt_create();
+    if (!ctx->cmt) {
+        flb_plg_error(in, "could not initialize CMetrics");
         flb_free(ctx);
         return -1;
     }
@@ -736,6 +753,10 @@ static int cb_ebpf_exit(void *data, struct flb_config *config)
         shm_bpf__destroy(ctx->shm_skel);
     }
 
+    if (ctx->cmt) {
+        cmt_destroy(ctx->cmt);
+    }
+
     /* done */
     flb_free(ctx);
 
@@ -769,5 +790,6 @@ struct flb_input_plugin in_ebpf_plugin = {
     .cb_resume    = cb_ebpf_resume,
     .cb_exit      = cb_ebpf_exit,
     .config_map   = config_map,
-    .flags        = 0
+    .flags        = 0,
+    .event_type   = FLB_INPUT_METRICS
 };

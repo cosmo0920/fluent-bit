@@ -29,6 +29,34 @@ struct flb_in_ebpf {
     int coll_fd;       /* collector id/fd            */
     int interval_sec;  /* interval collection time (Second) */
     int interval_nsec; /* interval collection time (Nanosecond) */
+    struct cmt *cmt;
+    /* OOM Victim */
+    struct cmt_counter *oom_victim;
+
+    /* VFS stats */
+    struct cmt_counter *vfs_read;
+    struct cmt_counter *vfs_write;
+    struct cmt_counter *vfs_fsync;
+    struct cmt_counter *vfs_open;
+    struct cmt_counter *vfs_create;
+    struct cmt_counter *vfs_unlink;
+    struct cmt_counter *vfs_truncate;
+    struct cmt_counter *vfs_fallocate;
+
+    /* TCP connect */
+    struct cmt_gauge *ipv4_tcpconnect;
+    struct cmt_gauge *ipv6_tcpconnect;
+
+    /* Shared memory (SHM) */
+    struct cmt_counter *shmget_total;
+    struct cmt_counter *shmat_total;
+    struct cmt_counter *shmdt_total;
+    struct cmt_counter *shmctl_total;
+    struct cmt_gauge *shmget;
+    struct cmt_gauge *shmat;
+    struct cmt_gauge *shmdt;
+    struct cmt_gauge *shmctl;
+
     struct vfsstat_bpf *vfsstat_skel;
     struct oom_victim_bpf *oom_victim_skel;
     struct tcpconnect_bpf *tcpconnect_skel;
