@@ -29,6 +29,7 @@
 #include <fluent-bit/flb_input.h>
 #include <fluent-bit/flb_error.h>
 #include <fluent-bit/flb_utils.h>
+#include <fluent-bit/flb_plugin_proxy.h>
 #include <fluent-bit/flb_engine.h>
 #include <fluent-bit/flb_metrics.h>
 #include <fluent-bit/flb_storage.h>
@@ -194,6 +195,24 @@ struct flb_input_instance *flb_input_new(struct flb_config *config,
             return NULL;
         }
 
+        if (plugin->type == FLB_INPUT_PLUGIN_CORE) {
+            instance->context = NULL;
+        }
+        else {
+            struct flb_plugin_proxy_context *ctx;
+
+            ctx = flb_calloc(1, sizeof(struct flb_plugin_proxy_context));
+            if (!ctx) {
+                flb_errno();
+                flb_free(instance);
+                return NULL;
+            }
+
+            ctx->proxy = plugin->proxy;
+
+            instance->context = ctx;
+        }
+
         /* initialize remaining vars */
         instance->alias    = NULL;
         instance->id       = id;
@@ -202,7 +221,6 @@ struct flb_input_instance *flb_input_new(struct flb_config *config,
         instance->tag      = NULL;
         instance->tag_len  = 0;
         instance->routable = FLB_TRUE;
-        instance->context  = NULL;
         instance->data     = data;
         instance->storage  = NULL;
         instance->storage_type = -1;
@@ -630,6 +648,20 @@ int flb_input_instance_init(struct flb_input_instance *ins,
     }
 #endif
 
+
+#ifdef FLB_HAVE_PROXY_GO
+    /* Proxy plugins have their own initialization */
+    if (p->type == FLB_INPUT_PLUGIN_PROXY) {
+        ret = flb_plugin_proxy_input_init(p->proxy, ins, config);
+        if (ret == -1) {
+            flb_input_instance_destroy(ins);
+            return -1;
+        }
+
+        return 0;
+    }
+#endif
+
     /*
      * Before to call the initialization callback, make sure that the received
      * configuration parameters are valid if the plugin is registering a config map.
@@ -741,6 +773,7 @@ void flb_input_instance_exit(struct flb_input_instance *ins,
 
     p = ins->p;
     if (p->cb_exit && ins->context) {
+        /* Multi-threaded input plugins use the same function signature for exit callbacks. */
         p->cb_exit(ins->context, config);
     }
 }

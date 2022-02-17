@@ -948,7 +948,7 @@ int flb_output_init_all(struct flb_config *config)
 #ifdef FLB_HAVE_PROXY_GO
         /* Proxy plugins have their own initialization */
         if (p->type == FLB_OUTPUT_PLUGIN_PROXY) {
-            ret = flb_plugin_proxy_init(p->proxy, ins, config);
+            ret = flb_plugin_proxy_output_init(p->proxy, ins, config);
             if (ret == -1) {
                 flb_output_instance_destroy(ins);
                 return -1;
