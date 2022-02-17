@@ -51,6 +51,8 @@
 
 /* Input plugin flag masks */
 #define FLB_INPUT_NET          4   /* input address may set host and port   */
+#define FLB_INPUT_PLUGIN_CORE  0
+#define FLB_INPUT_PLUGIN_PROXY 1
 #define FLB_INPUT_CORO       128   /* plugin requires a thread on callbacks */
 #define FLB_INPUT_PRIVATE    256   /* plugin is not published/exposed       */
 #define FLB_INPUT_NOTAG      512   /* plugin might don't have tags          */
@@ -66,6 +68,13 @@
 struct flb_input_instance;
 
 struct flb_input_plugin {
+    /*
+     * The type defines if this is a core-based plugin or it's handled by
+     * some specific proxy.
+     */
+    int type;
+    void *proxy;
+
     int flags;                /* plugin flags */
     int event_type;           /* event type to be genarated: logs ?, metrics ? */
 

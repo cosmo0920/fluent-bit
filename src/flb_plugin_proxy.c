@@ -51,11 +51,11 @@ static void proxy_cb_flush(struct flb_event_chunk *event_chunk,
 #ifdef FLB_HAVE_PROXY_GO
     if (ctx->proxy->def->proxy == FLB_PROXY_GOLANG) {
         flb_trace("[GO] entering go_flush()");
-        ret = proxy_go_flush(ctx,
-                             event_chunk->data,
-                             event_chunk->size,
-                             event_chunk->tag,
-                             flb_sds_len(event_chunk->tag));
+        ret = proxy_go_output_flush(ctx,
+                                    event_chunk->data,
+                                    event_chunk->size,
+                                    event_chunk->tag,
+                                    flb_sds_len(event_chunk->tag));
     }
 #else
     (void) ctx;
@@ -68,16 +68,68 @@ static void proxy_cb_flush(struct flb_event_chunk *event_chunk,
     FLB_OUTPUT_RETURN(ret);
 }
 
+static void proxy_cb_in_thread_callback(int write_fd, void *data)
+{
+    int ret = FLB_OK;
+    size_t len = 0;
+    struct flb_input_thread *it = data;
+    mpack_writer_t *writer = &it->writer;
+    struct flb_plugin_input_proxy_thread_config *ctx;
+
+#ifdef FLB_HAVE_PROXY_GO
+    ctx = container_of(it, struct flb_plugin_input_proxy_thread_config, it);
+
+    if (ctx->proxy->def->proxy == FLB_PROXY_GOLANG) {
+        while(!flb_input_thread_exited(it)) {
+            flb_trace("[GO] entering go_collect()");
+            ret = proxy_go_input_collect(ctx->proxy, &it->data, &len);
+
+            if (ret == -1) {
+                flb_errno();
+                break;
+            }
+
+            mpack_write_object_bytes(writer, it->data, len);
+            mpack_writer_flush_message(writer);
+            fflush(it->write_file);
+        }
+    }
+#endif
+}
+
 static void flb_plugin_proxy_destroy(struct flb_plugin_proxy *proxy);
-static int flb_proxy_cb_exit(void *data, struct flb_config *config)
+static int flb_proxy_output_cb_exit(void *data, struct flb_config *config)
 {
     struct flb_output_plugin *instance = data;
     struct flb_plugin_proxy *proxy = (instance->proxy);
 
     if (proxy->def->proxy == FLB_PROXY_GOLANG) {
-        proxy_go_destroy(proxy->data);
+        proxy_go_output_destroy(proxy->data);
     }
     flb_plugin_proxy_destroy(proxy);
+    return 0;
+}
+
+static int flb_proxy_input_cb_exit(void *in_context, struct flb_config *config)
+{
+    struct flb_input_thread *it;
+    struct flb_plugin_input_proxy_thread_config *ctx;
+
+    if (!in_context) {
+        return 0;
+    }
+
+    it = in_context;
+    ctx = container_of(it, struct flb_plugin_input_proxy_thread_config, it);
+
+    if (ctx->proxy->def->proxy == FLB_PROXY_GOLANG) {
+        proxy_go_input_destroy(ctx->proxy->data);
+    }
+    flb_plugin_proxy_destroy(ctx->proxy);
+
+    flb_input_thread_destroy(it, ctx->ins);
+    flb_free(ctx);
+
     return 0;
 }
 
@@ -107,7 +159,37 @@ static int flb_proxy_register_output(struct flb_plugin_proxy *proxy,
      * we put our proxy-middle callbacks to do the translation properly.
      */
     out->cb_flush = proxy_cb_flush;
-    out->cb_exit = flb_proxy_cb_exit;
+    out->cb_exit = flb_proxy_output_cb_exit;
+    return 0;
+}
+
+static int flb_proxy_register_input(struct flb_plugin_proxy *proxy,
+                                    struct flb_plugin_proxy_def *def,
+                                    struct flb_config *config)
+{
+    struct flb_input_plugin *in;
+
+    in = flb_calloc(1, sizeof(struct flb_input_plugin));
+    if (!in) {
+        flb_errno();
+        return -1;
+    }
+
+    /* Plugin registration */
+    in->type  = FLB_INPUT_PLUGIN_PROXY;
+    in->proxy = proxy;
+    in->flags = def->flags;
+    in->name  = def->name;
+    in->description = def->description;
+    mk_list_add(&in->_head, &config->in_plugins);
+
+    /*
+     * Set proxy callbacks: external plugins which are not following
+     * the core plugins specs, have a different callback approach, so
+     * we put our proxy-middle callbacks to do the translation properly.
+     */
+    in->cb_collect = flb_input_thread_collect;
+    in->cb_exit = flb_proxy_input_cb_exit;
     return 0;
 }
 
@@ -160,7 +242,12 @@ int flb_plugin_proxy_register(struct flb_plugin_proxy *proxy,
     ret = -1;
     if (def->proxy == FLB_PROXY_GOLANG) {
 #ifdef FLB_HAVE_PROXY_GO
-        ret = proxy_go_register(proxy, def);
+        if (def->type == FLB_PROXY_OUTPUT_PLUGIN) {
+            ret = proxy_go_output_register(proxy, def);
+        }
+        else if (def->type == FLB_PROXY_INPUT_PLUGIN) {
+            ret = proxy_go_input_register(proxy, def);
+        }
 #endif
     }
     if (ret == 0) {
@@ -171,14 +258,17 @@ int flb_plugin_proxy_register(struct flb_plugin_proxy *proxy,
         if (def->type == FLB_PROXY_OUTPUT_PLUGIN) {
             flb_proxy_register_output(proxy, def, config);
         }
+        else if (def->type == FLB_PROXY_INPUT_PLUGIN) {
+            flb_proxy_register_input(proxy, def, config);
+        }
     }
 
     return 0;
 }
 
-int flb_plugin_proxy_init(struct flb_plugin_proxy *proxy,
-                          struct flb_output_instance *o_ins,
-                          struct flb_config *config)
+int flb_plugin_proxy_output_init(struct flb_plugin_proxy *proxy,
+                                 struct flb_output_instance *o_ins,
+                                 struct flb_config *config)
 {
     int ret = -1;
 
@@ -188,7 +278,7 @@ int flb_plugin_proxy_init(struct flb_plugin_proxy *proxy,
     /* Based on 'proxy', use the proper handler */
     if (proxy->def->proxy == FLB_PROXY_GOLANG) {
 #ifdef FLB_HAVE_PROXY_GO
-        ret = proxy_go_init(proxy);
+        ret = proxy_go_output_init(proxy);
 #endif
     }
     else {
@@ -197,6 +287,71 @@ int flb_plugin_proxy_init(struct flb_plugin_proxy *proxy,
     }
 
     return ret;
+}
+
+int flb_plugin_proxy_input_init(struct flb_plugin_proxy *proxy,
+                                struct flb_input_instance *i_ins,
+                                struct flb_config *config)
+{
+    int ret = -1;
+    struct flb_plugin_input_proxy_thread_config *ctx;
+
+    /* Allocate space for the configuration context */
+    ctx = flb_malloc(sizeof(struct flb_plugin_input_proxy_thread_config));
+    if (!ctx) {
+        flb_errno();
+        return -1;
+    }
+
+    /* create worker thread */
+    ret = flb_input_thread_init(&ctx->it, proxy_cb_in_thread_callback, &ctx->it);
+    if (ret) {
+        flb_errno();
+        flb_error("Could not initialize worker thread");
+        goto init_error;
+    }
+
+    /* Set the context */
+    flb_input_set_context(i_ins, &ctx->it);
+
+    /* Collect upon data available on the pipe read fd */
+    ret = flb_input_set_collector_event(i_ins,
+                                        flb_input_thread_collect,
+                                        ctx->it.read,
+                                        config);
+    if (ret == -1) {
+        flb_error("Could not set collector for threaded proxy input plugin");
+        goto init_error;
+    }
+    ctx->it.coll_fd = ret;
+    /* Before to initialize for proxy, set the proxy instance reference */
+    ctx->proxy = proxy;
+
+    /* Before to initialize, set the instance reference */
+    proxy->instance = i_ins;
+
+    /* Based on 'proxy', use the proper handler */
+    if (proxy->def->proxy == FLB_PROXY_GOLANG) {
+#ifdef FLB_HAVE_PROXY_GO
+        ret = proxy_go_input_init(proxy);
+
+        if (ret == -1) {
+            flb_error("Could not initialize proxy for threaded input plugin");
+            goto init_error;
+        }
+#endif
+    }
+    else {
+        fprintf(stderr, "[proxy] unrecognized input proxy handler %i\n",
+                proxy->def->proxy);
+    }
+
+    return ret;
+
+init_error:
+    flb_free(ctx);
+
+    return -1;
 }
 
 struct flb_plugin_proxy *flb_plugin_proxy_create(const char *dso_path, int type,
