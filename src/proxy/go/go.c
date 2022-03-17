@@ -246,7 +246,9 @@ int proxy_go_input_cleanup(struct flb_plugin_proxy *ctx,
     int ret = 0;
     struct flbgo_input_plugin *plugin = ctx->data;
 
-    ret = plugin->cb_cleanup(allocated_data);
+    if (plugin->cb_cleanup) {
+        ret = plugin->cb_cleanup(allocated_data);
+    }
 
     return ret;
 }

@@ -93,6 +93,10 @@ static void proxy_cb_in_thread_callback(int write_fd, void *data)
             mpack_writer_flush_message(writer);
             fflush(it->write_file);
 
+            if (!it->data) {
+                free(data);
+            }
+
             ret = proxy_go_input_cleanup(ctx->proxy, it->data);
             if (ret == -1) {
                 flb_errno();
