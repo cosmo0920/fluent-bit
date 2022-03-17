@@ -193,6 +193,7 @@ int proxy_go_input_register(struct flb_plugin_proxy *proxy,
     }
 
     plugin->cb_collect = flb_plugin_proxy_symbol(proxy, "FLBPluginInputCallback");
+    plugin->cb_cleanup = flb_plugin_proxy_symbol(proxy, "FLBPluginInputCleanupCallback");
     plugin->cb_exit  = flb_plugin_proxy_symbol(proxy, "FLBPluginExit");
     plugin->name     = flb_strdup(def->name);
 
@@ -235,6 +236,17 @@ int proxy_go_input_collect(struct flb_plugin_proxy *ctx,
     ret = plugin->cb_collect(&data, len);
 
     *collected_data = data;
+
+    return ret;
+}
+
+int proxy_go_input_cleanup(struct flb_plugin_proxy *ctx,
+                           void *allocated_data)
+{
+    int ret = 0;
+    struct flbgo_input_plugin *plugin = ctx->data;
+
+    ret = plugin->cb_cleanup(allocated_data);
 
     return ret;
 }
