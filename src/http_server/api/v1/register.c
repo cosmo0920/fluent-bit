@@ -26,6 +26,7 @@
 #include "plugins.h"
 #include "health.h"
 #include "trace.h"
+#include "sp_query.h"
 
 int api_v1_registration(struct flb_hs *hs)
 {
