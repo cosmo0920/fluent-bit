@@ -25,6 +25,7 @@
 #include "storage.h"
 #include "plugins.h"
 #include "health.h"
+#include "sp_query.h"
 
 int api_v1_registration(struct flb_hs *hs)
 {
