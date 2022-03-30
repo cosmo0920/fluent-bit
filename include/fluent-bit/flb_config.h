@@ -234,6 +234,7 @@ struct flb_config {
 #ifdef FLB_HAVE_STREAM_PROCESSOR
     char *stream_processor_file;            /* SP configuration file */
     void *stream_processor_ctx;             /* SP context */
+    void *stream_processor_creds_ctx;       /* SP creds context */
 
     /*
      * Temporal list to hold tasks defined before the SP context is created

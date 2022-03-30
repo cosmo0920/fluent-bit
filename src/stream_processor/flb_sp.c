@@ -135,6 +135,88 @@ fconf_error:
     return -1;
 }
 
+/* Read and process file system configuration file */
+static int sp_credential_config_file(struct flb_config *config,
+                                     struct flb_sp_credentials *sp_creds,
+                                     const char *file)
+{
+    int ret;
+    char *user;
+    char *password;
+    char *cfg = NULL;
+    char tmp[PATH_MAX + 1];
+    struct stat st;
+    struct mk_list *head;
+    struct flb_sp_credential *cred;
+    struct flb_cf *cf;
+    struct flb_cf_section *section;
+
+#ifndef FLB_HAVE_STATIC_CONF
+    ret = stat(file, &st);
+    if (ret == -1 && errno == ENOENT) {
+        /* Try to resolve the real path (if exists) */
+        if (file[0] == '/') {
+            flb_error("[sp] cannot open configuration file: %s", file);
+            return -1;
+        }
+
+        if (config->conf_path) {
+            snprintf(tmp, PATH_MAX, "%s%s", config->conf_path, file);
+            cfg = tmp;
+        }
+    }
+    else {
+        cfg = (char *) file;
+    }
+
+    cf = flb_cf_create_from_file(NULL, cfg);
+#else
+    cf = flb_config_static_open(file);
+#endif
+
+    if (!cf) {
+        return -1;
+    }
+
+    /* Read all 'auth' sections */
+    mk_list_foreach(head, &cf->sections) {
+        section = mk_list_entry(head, struct flb_cf_section, _head);
+        if (strcasecmp(section->name, "auth") != 0) {
+            continue;
+        }
+
+        user = NULL;
+        password = NULL;
+
+        /* user */
+        user = flb_cf_section_property_get(cf, section, "user");
+        if (!user) {
+            flb_error("[sp] credentials 'user' not found in file '%s'", cfg);
+            goto fconf_error;
+        }
+
+        /* password */
+        password = flb_cf_section_property_get(cf, section, "password");
+        if (!password) {
+            flb_error("[sp] credentials 'password' not found in file %s", cfg);
+            goto fconf_error;
+        }
+
+        /* Register the credentials */
+        cred = flb_sp_credential_create(sp_creds, user, password);
+        if (!cred) {
+            goto fconf_error;
+        }
+    }
+
+    flb_cf_destroy(cf);
+    return 0;
+
+fconf_error:
+    flb_cf_destroy(cf);
+    return -1;
+}
+
 static int sp_task_to_instance(struct flb_sp_task *task, struct flb_sp *sp)
 {
     struct mk_list *head;
@@ -411,6 +493,39 @@ int flb_sp_snapshot_create(struct flb_sp_task *task)
     return 0;
 }
 
+struct flb_sp_credential *flb_sp_credential_create(struct flb_sp_credentials *sp_creds, const char *user,
+                                                   const char *password)
+{
+    int fd;
+    int ret;
+    struct flb_sp_credential *cred;
+
+    /* Create the credential context */
+    cred = flb_calloc(1, sizeof(struct flb_sp_credential));
+    if (!cred) {
+        flb_errno();
+        return NULL;
+    }
+    cred->user = flb_sds_create(user);
+    if (!cred->user) {
+        flb_sds_destroy(cred->user);
+        flb_free(cred);
+        return NULL;
+    }
+
+    cred->password = flb_sds_create(password);
+    if (!cred->password) {
+        flb_sds_destroy(cred->user);
+        flb_sds_destroy(cred->password);
+        flb_free(cred);
+        return NULL;
+    }
+
+    mk_list_add(&cred->_head, &sp_creds->credentials);
+
+    return cred;
+}
+
 struct flb_sp_task *flb_sp_task_create(struct flb_sp *sp, const char *name,
                                        const char *query)
 {
@@ -665,6 +780,47 @@ void flb_sp_task_destroy(struct flb_sp_task *task)
 
     flb_sp_cmd_destroy(task->cmd);
     flb_free(task);
+}
+
+void flb_sp_credential_destroy(struct flb_sp_credential *cred)
+{
+    flb_sds_destroy(cred->user);
+    flb_sds_destroy(cred->password);
+    mk_list_del(&cred->_head);
+    flb_free(cred);
+}
+
+/* Create the strean processor credentials */
+struct flb_sp_credentials *flb_sp_credentials_create(struct flb_config *config)
+{
+    int ret;
+    struct mk_list *tmp;
+    struct mk_list *head;
+    struct flb_sp_credentials *sp_creds;
+    struct flb_sp_credential *sp_cred;
+
+    sp_creds = flb_malloc(sizeof(struct flb_sp_credentials));
+    if (!sp_creds) {
+        flb_errno();
+        return NULL;
+    }
+    sp_creds->config = config;
+    mk_list_init(&sp_creds->credentials);
+
+    /* Lookup configuration file if any */
+    if (config->stream_processor_file) {
+        ret = sp_credential_config_file(config, sp_creds, config->stream_processor_file);
+        if (ret == -1) {
+            flb_error("[sp] could not initialize stream processor");
+            mk_list_foreach_safe(head, tmp, &sp_creds->credentials) {
+                sp_cred = mk_list_entry(head, struct flb_sp_credential, _head);
+                flb_sp_credential_destroy(sp_cred);
+            }
+            return NULL;
+        }
+    }
+
+    return sp_creds;
 }
 
 /* Create the stream processor context */
@@ -2128,6 +2284,22 @@ int flb_sp_fd_event(int fd, struct flb_sp *sp)
         }
     }
     return 0;
+}
+
+/* Destroy stream processor credentials context */
+void flb_sp_credentials_destroy(struct flb_sp_credentials *sp_creds)
+{
+    struct mk_list *tmp;
+    struct mk_list *head;
+    struct flb_sp_credential *cred;
+
+    /* destroy tasks */
+    mk_list_foreach_safe(head, tmp, &sp_creds->credentials) {
+        cred = mk_list_entry(head, struct flb_sp_credential, _head);
+        flb_sp_credential_destroy(cred);
+    }
+
+    flb_free(sp_creds);
 }
 
 /* Destroy stream processor context */
