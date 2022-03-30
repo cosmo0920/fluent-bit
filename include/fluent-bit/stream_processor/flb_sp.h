@@ -157,8 +157,27 @@ struct flb_sp {
     struct flb_config *config;   /* reference to Fluent Bit context */
 };
 
+struct flb_sp_credential {
+    flb_sds_t user;         /* task user name */
+    flb_sds_t password;     /* task password */
+    struct mk_list _head;    /* link to parent list flb_sp_credentials->tasks */
+};
+
+struct flb_sp_credentials {
+    struct mk_list credentials; /* processor credentials */
+    struct flb_config *config;  /* reference to Fluent Bit context */
+};
+
 struct flb_sp *flb_sp_create(struct flb_config *config);
 void flb_sp_destroy(struct flb_sp *sp);
+
+struct flb_sp_credentials *flb_sp_credentials_create(struct flb_config *config);
+void flb_sp_credentials_destroy(struct flb_sp_credentials *creds);
+
+struct flb_sp_credential *flb_sp_credential_create(struct flb_sp_credentials *sp_creds,
+                                                   const char *user,
+                                                   const char *password);
+void flb_sp_credential_destroy(struct flb_sp_credential *cred);
 
 int flb_sp_do(struct flb_sp *sp, struct flb_input_instance *in,
               const char *tag, int tag_len,

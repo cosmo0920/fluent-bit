@@ -19,6 +19,9 @@
  */
 
 #include <monkey/mk_http_status.h>
+#include <monkey/mk_http.h>
+#include <fluent-bit/flb_base64.h>
+#include <fluent-bit/flb_sha512.h>
 #include <fluent-bit/flb_info.h>
 #include <fluent-bit/flb_pack.h>
 #include <fluent-bit/flb_sds.h>
@@ -28,6 +31,7 @@
 #include <fluent-bit/stream_processor/flb_sp.h>
 #include <fluent-bit/stream_processor/flb_sp_stream.h>
 #include <fluent-bit/stream_processor/flb_sp_snapshot.h>
+#include "sp_query.h"
 
 #define HTTP_CONTENT_JSON  0
 
@@ -38,21 +42,118 @@ static void send_response(mk_request_t *request, int code, char *message, size_t
     mk_http_done(request);
 }
 
+static void sha512_buf_to_hex(uint8_t *hash, char *out)
+{
+    int i;
+    static const char hex[] = "0123456789abcdef";
+    char *buf = out;
+
+    for (i = 0; i < 64; i++) {
+        *buf++ = hex[hash[i] >> 4];
+        *buf++ = hex[hash[i] & 0xf];
+    }
+}
+
+static int auth_validate(const char *credentials, unsigned int len,
+                          mk_request_t *request, struct flb_sp_credentials *creds)
+{
+    int sep;
+    size_t auth_len;
+    char decoded[128] = { 0 };
+    int ret;
+    struct mk_list *tmp;
+    struct mk_list *head;
+    struct flb_sp_credential *cred;
+    struct flb_sha512 sha512;
+    uint8_t buf[64] = { 0 };
+    char sha512hex[128] = { 0 };
+
+    /* Validate value length */
+    if (len <= auth_header_basic.len + 1) {
+        send_response(request, MK_CLIENT_UNAUTH, NULL, 0);
+        return -1;
+    }
+
+    if (strncmp(credentials, auth_header_basic.data,
+                auth_header_basic.len) != 0) {
+        send_response(request, MK_CLIENT_UNAUTH, NULL, 0);
+        return -1;
+    }
+
+    /* Decode credentials: incoming credentials comes in base64 encode */
+    ret = flb_base64_decode((unsigned char *) decoded, sizeof(decoded), &auth_len,
+                            (unsigned char *) credentials + auth_header_basic.len, len - auth_header_basic.len);
+    if (ret != 0) {
+        send_response(request, MK_CLIENT_UNAUTH, NULL, 0);
+        return -1;
+    }
+
+    sep = mk_string_search_n((char *)decoded, ":", 1, auth_len);
+    if (sep == -1 || sep == 0  || (unsigned int) sep == auth_len - 1) {
+        send_response(request, MK_CLIENT_UNAUTH, NULL, 0);
+        return -1;
+    }
+
+    /* Get SHA512 hash */
+    flb_sha512_init(&sha512);
+    flb_sha512_update(&sha512, (unsigned char *) decoded + sep + 1, auth_len - (sep + 1));
+    flb_sha512_sum(&sha512, buf);
+    sha512_buf_to_hex(buf, sha512hex);
+
+    mk_list_foreach_safe(head, tmp, &creds->credentials) {
+        cred = mk_list_entry(head, struct flb_sp_credential, _head);
+
+        /* match user */
+        if (strlen(cred->user) != (unsigned int) sep) {
+            continue;
+        }
+        if (strncmp(cred->user, (char *)decoded, sep) != 0) {
+            continue;
+        }
+
+        /* match password */
+        if (memcmp(cred->password, sha512hex, 128) == 0) {
+            return 0;
+        }
+        break;
+    }
+
+    send_response(request, MK_CLIENT_UNAUTH, NULL, 0);
+    return -1;
+}
+
 static void create_stream(mk_request_t *request, void *data)
 {
     flb_sds_t task_name;
     flb_sds_t query;
+    int ret = 0;
     struct flb_hs *hs = data;
     struct flb_config *config = hs->config;
     struct flb_sp_task *task = NULL;
     struct flb_sp *sp;
+    struct flb_sp_credentials *sp_creds;
     struct mk_list *head;
 
     /* Context Type */
     int type = -1;
     struct mk_http_header *header;
+    struct mk_http_header *auth_header;
 
     header = &request->session->parser.headers[MK_HEADER_CONTENT_TYPE];
+    auth_header = mk_http_header_get(MK_HEADER_AUTHORIZATION, request, NULL, 0);
+
+    if (config->stream_processor_creds_ctx) {
+        sp_creds = (struct flb_sp_credentials *) config->stream_processor_creds_ctx;
+
+        if (mk_list_size(&sp_creds->credentials) > 1) {
+            auth_header = mk_http_header_get(MK_HEADER_AUTHORIZATION, request, NULL, 0);
+            ret = auth_validate(auth_header->val.data, auth_header->val.len, request, sp_creds);
+            if (ret != 0) {
+                flb_error("[sp][auth] User authentication is not succeeded");
+                return;
+            }
+        }
+    }
 
     if (header->val.len == 16 &&
         strncasecmp(header->val.data, "application/json", 16) == 0) {
@@ -124,19 +225,35 @@ static void delete_stream(mk_request_t *request, void *data)
 {
     int i;
     int task_index;
+    int ret = 0;
     /* config */
     struct flb_hs *hs = data;
     struct flb_config *config = hs->config;
 
     struct flb_sp *sp;
     struct flb_sp_task *task;
+    struct flb_sp_credentials *sp_creds;
     struct mk_list *head;
+    struct mk_http_header *auth_header;
 
     task_index = request->uri_processed.len;
     for (i = request->uri_processed.len - 1; i > 0; i--) {
         if (request->uri_processed.data[i] == '/') {
             task_index = i + 1;
             break;
+        }
+    }
+
+    if (config->stream_processor_creds_ctx) {
+        sp_creds = (struct flb_sp_credentials *) config->stream_processor_creds_ctx;
+
+        if (mk_list_size(&sp_creds->credentials) > 1) {
+            auth_header = mk_http_header_get(MK_HEADER_AUTHORIZATION, request, NULL, 0);
+            ret = auth_validate(auth_header->val.data, auth_header->val.len, request, sp_creds);
+            if (ret != 0) {
+                flb_error("[sp][auth] User authentication is not succeeded");
+                return;
+            }
         }
     }
 
@@ -188,19 +305,36 @@ static void cb_sp_list_tasks(mk_request_t *request, void *data)
     /* output buffers */
     flb_sds_t out_buf = NULL;
     size_t out_size = 0;
+    int ret = 0;
     struct flb_hs *hs = data;
     struct flb_config *config = hs->config;
 
     struct mk_list *head;
     struct flb_sp *sp;
     struct flb_sp_task *task;
+    struct flb_sp_credentials *sp_creds;
     /* msgpack */
     msgpack_packer mp_pck;
     msgpack_sbuffer mp_sbuf;
 
+    struct mk_http_header *auth_header;
+
     if (request->method != MK_METHOD_GET) {
         send_response(request, MK_CLIENT_BAD_REQUEST, NULL, 0);
         return;
+    }
+
+    if (config->stream_processor_creds_ctx) {
+        sp_creds = (struct flb_sp_credentials *) config->stream_processor_creds_ctx;
+
+        if (mk_list_size(&sp_creds->credentials) > 1) {
+            auth_header = mk_http_header_get(MK_HEADER_AUTHORIZATION, request, NULL, 0);
+            ret = auth_validate(auth_header->val.data, auth_header->val.len, request, sp_creds);
+            if (ret != 0) {
+                flb_error("[sp][auth] User authentication is not succeeded");
+                return;
+            }
+        }
     }
 
     if (config->stream_processor_ctx) {
@@ -307,6 +441,7 @@ static void cb_sp_flush_snapshot(mk_request_t *request, void *data)
     /* output buffers */
     flb_sds_t out_buf = NULL;
     size_t out_size = 0;
+    int ret = 0;
     /* config */
     struct flb_hs *hs = data;
     struct flb_config *config = hs->config;
@@ -315,7 +450,9 @@ static void cb_sp_flush_snapshot(mk_request_t *request, void *data)
     char *snapshot_out_buffer = NULL;
     struct flb_sp *sp;
     struct flb_sp_task *task;
+    struct flb_sp_credentials *sp_creds;
     struct mk_list *head;
+    struct mk_http_header *auth_header;
 
     if (request->method != MK_METHOD_GET) {
         send_response(request, MK_CLIENT_BAD_REQUEST, NULL, 0);
@@ -327,6 +464,19 @@ static void cb_sp_flush_snapshot(mk_request_t *request, void *data)
         if (request->uri_processed.data[i] == '/') {
             task_index = i + 1;
             break;
+        }
+    }
+
+    if (config->stream_processor_creds_ctx) {
+        sp_creds = (struct flb_sp_credentials *) config->stream_processor_creds_ctx;
+
+        if (mk_list_size(&sp_creds->credentials) > 1) {
+            auth_header = mk_http_header_get(MK_HEADER_AUTHORIZATION, request, NULL, 0);
+            ret = auth_validate(auth_header->val.data, auth_header->val.len, request, sp_creds);
+            if (ret != 0) {
+                flb_error("[sp][auth] User authentication is not succeeded");
+                return;
+            }
         }
     }
 
@@ -383,6 +533,10 @@ static void cb_sp_flush_snapshot(mk_request_t *request, void *data)
 /* Perform registration */
 int api_v1_sp_query(struct flb_hs *hs)
 {
+    /* Set HTTP headers key */
+    auth_header_basic.data = FLUENT_BIT_AUTH_HEADER_BASIC;
+    auth_header_basic.len  = sizeof(FLUENT_BIT_AUTH_HEADER_BASIC) - 1;
+
     mk_vhost_handler(hs->ctx, hs->vid, "/api/v1/stream_processor/task/[A-Za-z_][0-9A-Za-z_\\-]*", cb_sp_delete_task, hs);
     mk_vhost_handler(hs->ctx, hs->vid, "/api/v1/stream_processor/task", cb_sp_create_task, hs);
     mk_vhost_handler(hs->ctx, hs->vid, "/api/v1/stream_processor/list", cb_sp_list_tasks, hs);

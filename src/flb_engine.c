@@ -731,6 +731,10 @@ int flb_engine_start(struct flb_config *config)
     if (!config->stream_processor_ctx) {
         flb_error("[engine] could not initialize stream processor");
     }
+    config->stream_processor_creds_ctx = flb_sp_credentials_create(config);
+    if (!config->stream_processor_creds_ctx) {
+        flb_error("[engine] could not initialize stream processor credentials");
+    }
 #endif
 
     /*
@@ -905,6 +909,10 @@ int flb_engine_shutdown(struct flb_config *config)
 #ifdef FLB_HAVE_STREAM_PROCESSOR
     if (config->stream_processor_ctx) {
         flb_sp_destroy(config->stream_processor_ctx);
+    }
+
+    if (config->stream_processor_creds_ctx) {
+        flb_sp_credentials_destroy(config->stream_processor_creds_ctx);
     }
 #endif
 

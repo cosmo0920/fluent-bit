@@ -24,6 +24,10 @@
 #include <fluent-bit/flb_info.h>
 #include <fluent-bit/flb_http_server.h>
 
+/* Header stuff */
+#define FLUENT_BIT_AUTH_HEADER_BASIC     "Basic "
+mk_ptr_t auth_header_basic;
+
 int api_v1_sp_query(struct flb_hs *hs);
 
 #endif
