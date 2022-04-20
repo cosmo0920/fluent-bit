@@ -313,26 +313,6 @@ int flb_plugin_proxy_input_init(struct flb_plugin_proxy *proxy,
         return -1;
     }
 
-    /* create worker thread */
-    ret = flb_input_thread_init(&ctx->it, proxy_cb_in_thread_callback, &ctx->it);
-    if (ret) {
-        flb_errno();
-        flb_error("Could not initialize worker thread");
-        goto init_error;
-    }
-
-    /* Set the context */
-    flb_input_set_context(i_ins, &ctx->it);
-
-    /* Collect upon data available on the pipe read fd */
-    ret = flb_input_set_collector_event(i_ins,
-                                        flb_input_thread_collect,
-                                        ctx->it.read,
-                                        config);
-    if (ret == -1) {
-        flb_error("Could not set collector for threaded proxy input plugin");
-        goto init_error;
-    }
     ctx->it.coll_fd = ret;
     /* Before to initialize for proxy, set the proxy instance reference */
     ctx->proxy = proxy;
@@ -354,6 +334,27 @@ int flb_plugin_proxy_input_init(struct flb_plugin_proxy *proxy,
     else {
         fprintf(stderr, "[proxy] unrecognized input proxy handler %i\n",
                 proxy->def->proxy);
+    }
+
+    /* create worker thread */
+    ret = flb_input_thread_init(&ctx->it, proxy_cb_in_thread_callback, &ctx->it);
+    if (ret) {
+        flb_errno();
+        flb_error("Could not initialize worker thread");
+        goto init_error;
+    }
+
+    /* Set the context */
+    flb_input_set_context(i_ins, &ctx->it);
+
+    /* Collect upon data available on the pipe read fd */
+    ret = flb_input_set_collector_event(i_ins,
+                                        flb_input_thread_collect,
+                                        ctx->it.read,
+                                        config);
+    if (ret == -1) {
+        flb_error("Could not set collector for threaded proxy input plugin");
+        goto init_error;
     }
 
     return ret;
