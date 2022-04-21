@@ -22,6 +22,12 @@ if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
   add_definitions(-DFLB_SYSTEM_MACOS)
 endif()
 
+# Define macro to identify Linux system
+if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+  set(FLB_SYSTEM_LINUX On)
+  add_definitions(-DFLB_SYSTEM_LINUX)
+endif()
+
 # Update CFLAGS
 if (MSVC)
   add_definitions(-D_CRT_SECURE_NO_WARNINGS)
@@ -695,6 +701,11 @@ endif()
 
 # Build tools/xxd-c
 add_subdirectory(tools/xxd-c)
+
+if(FLB_SYSTEM_LINUX)
+  # Install tools/stream_processor
+  add_subdirectory(tools/stream_processor)
+endif()
 
 # Static configuration generator (using xxd-c)
 if(FLB_STATIC_CONF)
