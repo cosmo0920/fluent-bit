@@ -132,11 +132,11 @@ static int flb_proxy_input_cb_exit(void *in_context, struct flb_config *config)
     it = in_context;
     ctx = container_of(it, struct flb_plugin_input_proxy_thread_config, it);
 
+    flb_input_thread_destroy(it, ctx->ins);
+
     if (ctx->proxy->def->proxy == FLB_PROXY_GOLANG) {
         proxy_go_input_destroy(ctx->proxy->data);
     }
-
-    flb_input_thread_destroy(it, ctx->ins);
 
     flb_plugin_proxy_destroy(ctx->proxy);
 
