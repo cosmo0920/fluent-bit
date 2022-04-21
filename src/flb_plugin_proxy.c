@@ -315,7 +315,6 @@ int flb_plugin_proxy_input_init(struct flb_plugin_proxy *proxy,
         return -1;
     }
 
-    ctx->it.coll_fd = ret;
     /* Before to initialize for proxy, set the proxy instance reference */
     ctx->proxy = proxy;
 
@@ -358,6 +357,7 @@ int flb_plugin_proxy_input_init(struct flb_plugin_proxy *proxy,
         flb_error("Could not set collector for threaded proxy input plugin");
         goto init_error;
     }
+    ctx->it.coll_fd = ret;
 
     return ret;
 
