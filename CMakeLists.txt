@@ -809,6 +809,11 @@ endif()
 # Build tools/xxd-c
 add_subdirectory(tools/xxd-c)
 
+if(FLB_SYSTEM_LINUX)
+  # Install tools/stream_processor
+  add_subdirectory(tools/stream_processor)
+endif()
+
 # Static configuration generator (using xxd-c)
 if(FLB_STATIC_CONF)
   FLB_DEFINITION(FLB_HAVE_STATIC_CONF)
