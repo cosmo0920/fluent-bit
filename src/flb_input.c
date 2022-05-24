@@ -475,6 +475,13 @@ const char *flb_input_get_property(const char *key,
     return flb_config_prop_get(key, &ins->properties);
 }
 
+#ifdef FLB_HAVE_METRICS
+void *flb_input_get_cmt_instance(struct flb_input_instance *ins)
+{
+    return (void *)ins->cmt;
+}
+#endif
+
 /* Return an instance name or alias */
 const char *flb_input_name(struct flb_input_instance *ins)
 {

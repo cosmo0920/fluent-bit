@@ -509,6 +509,9 @@ int flb_input_set_property(struct flb_input_instance *ins,
                            const char *k, const char *v);
 const char *flb_input_get_property(const char *key,
                                    struct flb_input_instance *ins);
+#ifdef FLB_HAVE_METRICS
+void *flb_input_get_cmt_instance(struct flb_input_instance *ins);
+#endif
 
 int flb_input_check(struct flb_config *config);
 void flb_input_set_context(struct flb_input_instance *ins, void *context);

@@ -728,6 +728,9 @@ const char *flb_output_name(struct flb_output_instance *in);
 int flb_output_set_property(struct flb_output_instance *out,
                             const char *k, const char *v);
 const char *flb_output_get_property(const char *key, struct flb_output_instance *ins);
+#ifdef FLB_HAVE_METRICS
+void *flb_output_get_cmt_instance(struct flb_output_instance *ins);
+#endif
 void flb_output_net_default(const char *host, int port,
                             struct flb_output_instance *ins);
 const char *flb_output_name(struct flb_output_instance *ins);
