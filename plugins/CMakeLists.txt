@@ -216,6 +216,10 @@ if(FLB_PARSER)
   REGISTER_IN_PLUGIN("in_exec")
 endif()
 
+if(FLB_WASM)
+  REGISTER_IN_PLUGIN("in_exec_wasi")
+endif()
+
 REGISTER_IN_PLUGIN("in_tcp")
 REGISTER_IN_PLUGIN("in_mqtt")
 REGISTER_IN_PLUGIN("in_lib")
