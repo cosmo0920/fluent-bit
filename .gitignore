@@ -35,3 +35,6 @@ compile_commands.json
 
 workflow/
 .kitchen/
+
+# examples
+examples/wasi_serde_json/target/
