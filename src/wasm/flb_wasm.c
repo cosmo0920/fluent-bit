@@ -84,6 +84,12 @@ struct flb_wasm *flb_wasm_instantiate(struct flb_config *config, const char *was
         goto error;
     }
 
+    if ((get_package_type(buffer, buf_size) != Wasm_Module_Bytecode) &&
+        (get_package_type(buffer, buf_size) != Wasm_Module_AoT)) {
+        flb_error("WASM bytecode or AOT is expected but other file format");
+        goto error;
+    }
+
     module = wasm_runtime_load(buffer, buf_size, error_buf, sizeof(error_buf));
     if (!module) {
         flb_error("Load wasm module failed. error: %s", error_buf);
