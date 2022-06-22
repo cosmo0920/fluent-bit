@@ -102,13 +102,13 @@ struct flb_wasm *flb_wasm_instantiate(struct flb_config *config, const char *was
         goto error;
     }
 
-    if ((get_package_type(buffer, buf_size) != Wasm_Module_Bytecode) &&
-        (get_package_type(buffer, buf_size) != Wasm_Module_AoT)) {
+    if ((get_package_type((const uint8_t *)buffer, buf_size) != Wasm_Module_Bytecode) &&
+        (get_package_type((const uint8_t *)buffer, buf_size) != Wasm_Module_AoT)) {
         flb_error("WASM bytecode or AOT is expected but other file format");
         goto error;
     }
 
-    module = wasm_runtime_load(buffer, buf_size, error_buf, sizeof(error_buf));
+    module = wasm_runtime_load((uint8_t *)buffer, buf_size, error_buf, sizeof(error_buf));
     if (!module) {
         flb_error("Load wasm module failed. error: %s", error_buf);
         goto error;
@@ -149,9 +149,11 @@ struct flb_wasm *flb_wasm_instantiate(struct flb_config *config, const char *was
     return fw;
 
 error:
+#if WASM_ENABLE_LIBC_WASI != 0
     if (wasi_dir_list != NULL) {
         flb_free(wasi_dir_list);
     }
+#endif
     if (exec_env) {
         wasm_runtime_destroy_exec_env(exec_env);
     }
