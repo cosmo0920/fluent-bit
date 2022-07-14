@@ -62,9 +62,9 @@ struct flb_plugin_proxy_context {
     struct flb_plugin_proxy *proxy;
 };
 
-struct flb_plugin_input_proxy_thread_config {
-    struct flb_input_instance *ins;
-    struct flb_input_thread it;
+struct flb_plugin_input_proxy_context {
+    flb_pipefd_t pipe[2];
+    int coll_fd;
     /* A proxy ptr is needed to store the proxy type/lang (OUTPUT/GOLANG) */
     struct flb_plugin_proxy *proxy;
 };
@@ -75,10 +75,6 @@ void *flb_plugin_proxy_symbol(struct flb_plugin_proxy *proxy,
 int flb_plugin_proxy_output_init(struct flb_plugin_proxy *proxy,
                                  struct flb_output_instance *o_ins,
                                  struct flb_config *config);
-
-int flb_plugin_proxy_input_init(struct flb_plugin_proxy *proxy,
-                                struct flb_input_instance *i_ins,
-                                struct flb_config *config);
 
 int flb_plugin_proxy_register(struct flb_plugin_proxy *proxy,
                               struct flb_config *config);

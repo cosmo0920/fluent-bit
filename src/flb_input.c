@@ -750,20 +750,6 @@ int flb_input_instance_init(struct flb_input_instance *ins,
     }
 #endif
 
-
-#ifdef FLB_HAVE_PROXY_GO
-    /* Proxy plugins have their own initialization */
-    if (p->type == FLB_INPUT_PLUGIN_PROXY) {
-        ret = flb_plugin_proxy_input_init(p->proxy, ins, config);
-        if (ret == -1) {
-            flb_input_instance_destroy(ins);
-            return -1;
-        }
-
-        return 0;
-    }
-#endif
-
     /*
      * Before to call the initialization callback, make sure that the received
      * configuration parameters are valid if the plugin is registering a config map.
