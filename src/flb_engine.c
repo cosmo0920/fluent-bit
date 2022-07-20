@@ -788,9 +788,12 @@ int flb_engine_start(struct flb_config *config)
 
     while (1) {
         rb_flush_flag = FLB_FALSE;
+        flb_info("[engine][loop] entering loop");
 
         mk_event_wait(evl); /* potentially conditional mk_event_wait or mk_event_wait_2 based on bucket queue capacity for one shot events */
+        flb_info("[engine][loop] waiting event");
         flb_event_priority_live_foreach(event, evl_bktq, evl, FLB_ENGINE_LOOP_MAX_ITER) {
+            flb_info("[engine][inner loop] event type %d", event->type);
             if (event->type == FLB_ENGINE_EV_CORE) {
                 ret = flb_engine_handle_event(event->fd, event->mask, config);
                 if (ret == FLB_ENGINE_STOP) {
@@ -916,6 +919,7 @@ int flb_engine_start(struct flb_config *config)
             else if(event->type == FLB_ENGINE_EV_THREAD_INPUT) {
                 flb_engine_drain_ring_buffer_signal_channel(event->fd);
 
+                flb_info("[engine][threaded] ready to flush");
                 rb_flush_flag = FLB_TRUE;
             }
         }

@@ -1669,6 +1669,8 @@ retry:
         goto retry;
     }
 
+    flb_debug("[input chunk] finish up to write ring buffer");
+
     return 0;
 }
 

@@ -475,8 +475,8 @@ int flb_input_thread_instance_exit(struct flb_input_instance *ins)
         return -1;
     }
 
-    pthread_join(tid, NULL);
-    flb_plg_debug(ins, "thread exit instance");
+    ret = pthread_join(tid, NULL);
+    flb_plg_debug(ins, "thread exit instance with %d", ret);
 
     return 0;
 }
