@@ -46,6 +46,7 @@ static int cb_wasm_filter(const void *data, size_t bytes,
     int ret;
     char *ret_val = NULL;
     char *buf = NULL;
+    size_t buf_size;
     (void) f_ins;
     (void) i_ins;
     (void) config;
@@ -85,30 +86,63 @@ static int cb_wasm_filter(const void *data, size_t bytes,
             continue;
         }
 
-        alloc_size = (off - last_off) + 128; /* JSON is larger than msgpack */
-        last_off = off;
+        switch(ctx->event_format) {
+        case FLB_FILTER_WASM_FMT_JSON:
+            alloc_size = (off - last_off) + 128; /* JSON is larger than msgpack */
+            last_off = off;
 
-        /* Get timestamp */
-        flb_time_pop_from_msgpack(&t, &result, &p);
+            /* Get timestamp */
+            flb_time_pop_from_msgpack(&t, &result, &p);
 
-        /* Encode as JSON from msgpack */
-        buf = flb_msgpack_to_json_str(alloc_size, p);
+            /* Encode as JSON from msgpack */
+            buf = flb_msgpack_to_json_str(alloc_size, p);
 
-        if (buf) {
-            /* Execute WASM program */
-            ret_val = flb_wasm_call_function_format_json(ctx->wasm, ctx->wasm_function_name,
-                                                         tag, tag_len,
-                                                         t,
-                                                         buf, strlen(buf));
+            if (buf) {
+                /* Execute WASM program */
+                ret_val = flb_wasm_call_function_format_json(ctx->wasm, ctx->wasm_function_name,
+                                                             tag, tag_len,
+                                                             t,
+                                                             buf, strlen(buf));
 
-            flb_free(buf);
-        }
-        else {
-            flb_plg_error(ctx->ins, "encode as JSON from msgpack is failed");
-            msgpack_sbuffer_destroy(&tmp_sbuf);
-            msgpack_unpacked_destroy(&result);
+                flb_free(buf);
+            }
+            else {
+                flb_plg_error(ctx->ins, "encode as JSON from msgpack is failed");
+                msgpack_sbuffer_destroy(&tmp_sbuf);
+                msgpack_unpacked_destroy(&result);
 
-            goto on_error;
+                goto on_error;
+            }
+            break;
+        case FLB_FILTER_WASM_FMT_MSGPACK:
+            alloc_size = (off - last_off);
+            last_off = off;
+
+            /* Get timestamp */
+            flb_time_pop_from_msgpack(&t, &result, &p);
+
+            ret = flb_wasm_format_msgpack_mode(tag, tag_len,
+                                               data, bytes,
+                                               (void **)&buf, &buf_size);
+            flb_info("[flb_wasm] entries %d", ret);
+
+            if (ret < 0) {
+                flb_plg_error(ctx->ins, "format msgpack is failed");
+                msgpack_sbuffer_destroy(&tmp_sbuf);
+                msgpack_unpacked_destroy(&result);
+
+                goto on_error;
+
+            }
+
+            if (buf) {
+                /* Execute WASM program */
+                ret_val = flb_wasm_call_function_format_msgpack(ctx->wasm, ctx->wasm_function_name,
+                                                                buf, buf_size);
+
+                flb_free(buf);
+            }
+            break;
         }
 
         if (ret_val == NULL) { /* Skip record */
@@ -212,6 +246,8 @@ static int cb_wasm_init(struct flb_filter_instance *f_ins,
 {
     struct flb_filter_wasm *ctx = NULL;
     int ret = -1;
+    const char *tmp;
+    int event_format;
 
     /* Allocate space for the configuration */
     ctx = flb_malloc(sizeof(struct flb_filter_wasm));
@@ -223,6 +259,22 @@ static int cb_wasm_init(struct flb_filter_instance *f_ins,
     ret = filter_wasm_config_read(ctx, f_ins, config);
     if (ret < 0) {
         goto init_error;
+    }
+
+    tmp = flb_filter_get_property("event_format", f_ins);
+    if (tmp) {
+        if (strcasecmp(tmp, FLB_FMT_STR_JSON) == 0) {
+            event_format = FLB_FILTER_WASM_FMT_JSON;
+        }
+        else if (strcasecmp(tmp, FLB_FMT_STR_MSGPACK) == 0) {
+            event_format = FLB_FILTER_WASM_FMT_MSGPACK;
+        } else {
+            flb_error("[filter_wasm] unknown format: %s", tmp);
+            goto init_error;
+        }
+        ctx->event_format = event_format;
+    } else {
+        ctx->event_format = FLB_FILTER_WASM_FMT_JSON;
     }
 
     flb_wasm_init(config);
@@ -247,6 +299,11 @@ static int cb_wasm_exit(void *data, struct flb_config *config)
 }
 
 static struct flb_config_map config_map[] = {
+    {
+     FLB_CONFIG_MAP_STR, "event_format", NULL,
+     0, FLB_FALSE, 0,
+     "Sepecify the ingesting event format for wasm program"
+    },
     {
      FLB_CONFIG_MAP_STR, "wasm_path", NULL,
      0, FLB_TRUE, offsetof(struct flb_filter_wasm, wasm_path),
