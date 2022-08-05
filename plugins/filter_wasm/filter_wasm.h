@@ -36,6 +36,7 @@ struct flb_filter_wasm {
     flb_sds_t wasm_function_name;
     struct flb_filter_instance *ins;
     struct flb_wasm *wasm;
+    struct flb_wasm_payload *payload;
 };
 
 #endif /* FLB_FILTER_WASM_H */

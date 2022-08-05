@@ -43,6 +43,7 @@ struct flb_exec_wasi {
     size_t buf_size;
     struct flb_input_instance *ins;
     struct flb_wasm *wasm;
+    struct flb_wasm_payload *payload;
     int oneshot;
     flb_pipefd_t ch_manager[2];
     int interval_sec;

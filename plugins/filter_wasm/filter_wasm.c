@@ -67,7 +67,7 @@ static int cb_wasm_filter(const void *data, size_t bytes,
     struct flb_time t;
     struct flb_filter_wasm *ctx = filter_context;
 
-    wasm = flb_wasm_instantiate(config, ctx->wasm_path, ctx->accessible_dir_list, -1, -1, -1);
+    wasm = flb_wasm_instantiate(ctx->payload, config, ctx->wasm_path, ctx->accessible_dir_list, -1, -1, -1);
     if (wasm == NULL) {
         flb_plg_debug(ctx->ins, "instantiate wasm [%s] failed", ctx->wasm_path);
         goto on_error;
@@ -203,6 +203,10 @@ static void delete_wasm_config(struct flb_filter_wasm *ctx)
         return;
     }
 
+    if (ctx->payload) {
+        flb_wasm_payload_destroy(ctx->payload);
+    }
+
     flb_free(ctx);
 }
 
@@ -211,6 +215,7 @@ static int cb_wasm_init(struct flb_filter_instance *f_ins,
                         struct flb_config *config, void *data)
 {
     struct flb_filter_wasm *ctx = NULL;
+    struct flb_wasm_payload *payload = NULL;
     int ret = -1;
 
     /* Allocate space for the configuration */
@@ -226,6 +231,11 @@ static int cb_wasm_init(struct flb_filter_instance *f_ins,
     }
 
     flb_wasm_init(config);
+    payload = flb_wasm_payload_create(config);
+    if (!payload) {
+        goto init_error;
+    }
+    ctx->payload = payload;
 
     /* Set context */
     flb_filter_set_context(f_ins, ctx);

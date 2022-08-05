@@ -28,10 +28,13 @@
 #include <fluent-bit/flb_slist.h>
 #include <fluent-bit/wasm/flb_wasm.h>
 
+#include <sys/stat.h>
+#include <fcntl.h>
 #ifdef FLB_SYSTEM_WINDOWS
 #define STDIN_FILENO (_fileno( stdin ))
 #define STDOUT_FILENO (_fileno( stdout ))
 #define STDERR_FILENO (_fileno( stderr ))
+#include <io.h>
 #else
 #include <unistd.h>
 #endif
@@ -42,11 +45,124 @@ void flb_wasm_init(struct flb_config *config)
     mk_list_init(&config->wasm_list);
 }
 
-static int flb_wasm_load_wasm_binary(const char *wasm_path, int8_t **out_buf, uint32_t *out_size)
+struct flb_wasm_payload *flb_wasm_payload_create(struct flb_config *config)
+{
+    struct flb_wasm_payload *payload;
+
+    payload = flb_malloc(sizeof(struct flb_wasm));
+    if (!payload) {
+        flb_errno();
+        return NULL;
+    }
+    payload->buffer = NULL;
+    payload->size = 0;
+
+    return payload;
+}
+
+void flb_wasm_payload_destroy(struct flb_wasm_payload *payload)
+{
+    if (payload->buffer) {
+        flb_free(payload->buffer);
+    }
+}
+
+#if defined(FLB_SYSTEM_WINDOWS)
+static char* flb_read_wasm_file(const char *filename, uint32_t *out_size)
+{
+    char *buffer;
+    int handle;
+
+    uint32_t fsize, buf_size, rsize;
+    struct stat stat;
+
+    if (!filename || !out_size) {
+        flb_error("[wasm] invalid filename or out_size");
+        return NULL;
+    }
+
+    if (_sopen_s(&handle, filename, _O_RDONLY | _O_BINARY, _SH_DENYNO, 0)) {
+        flb_error("[wasm] open file %s is failed", filename);
+        return NULL;
+    }
+
+    if (fstat(handle, &stat)) {
+        flb_error("[wasm] fstat file %s is failed", filename);
+        _close(handle);
+    }
+    fsize = (uint32_t)stat.st_size;
+
+    buf_size = fsize > 0 ? fsize : 1;
+
+    if (!(buffer = (char *)flb_malloc((size_t)buf_size))) {
+        flb_error("[wasm] alloc memory failed.");
+        _close(handle);
+    }
+
+    rsize = read(handle, buffer, fsize);
+    _close(handle);
+
+    if (rsize < fsize) {
+        flb_error("[wasm] read file content failed.");
+        flb_free(buffer);
+    }
+
+    *out_size = fsize;
+    return buffer;
+}
+#else
+static char* flb_read_wasm_file(const char *filename, uint32_t *out_size)
+{
+    char *buffer;
+    int fd = 0;
+    uint32_t fsize, buf_size, rsize;
+    struct stat stat;
+
+    if (!filename || !out_size) {
+        flb_error("[wasm] open file %s is failed", filename);
+        return NULL;
+    }
+
+    if ((fd = open(filename, O_RDONLY, 0)) == -1) {
+        flb_error("[wasm] open file %s failed.\n", filename);
+        return NULL;
+    }
+
+    if (fstat(fd, &stat)) {
+        flb_error("[wasm] fstat file %s is failed", filename);
+        close(fd);
+        return NULL;
+    }
+
+    fsize = (uint32_t)stat.st_size;
+
+    buf_size = fsize > 0 ? fsize : 1;
+
+    if (!(buffer = flb_malloc((size_t)buf_size))) {
+        flb_error("[wasm] memory alloc failed.");
+        close(fd);
+    }
+
+    rsize = (uint32_t)read(fd, buffer, fsize);
+    close(fd);
+
+    if (rsize < fsize) {
+        flb_error("[wasm] read file contents failed.");
+        flb_free(buffer);
+        return NULL;
+    }
+
+    *out_size = fsize;
+    return buffer;
+}
+#endif
+
+static int flb_wasm_load_wasm_binary(struct flb_wasm_payload *payload, const char *wasm_path)
 {
     char *buffer;
     uint32_t buf_size;
-    buffer = bh_read_file_to_buffer(wasm_path, &buf_size);
+
+    buffer = flb_read_wasm_file(wasm_path, &buf_size);
     if (!buffer) {
         flb_error("Open wasm file [%s] failed.", wasm_path);
         goto error;
@@ -58,8 +174,8 @@ static int flb_wasm_load_wasm_binary(const char *wasm_path, int8_t **out_buf, ui
         goto error;
     }
 
-    *out_buf = buffer;
-    *out_size = buf_size;
+    payload->buffer = buffer;
+    payload->size = buf_size;
 
     return buffer != NULL;
 
@@ -68,13 +184,12 @@ error:
     return -1;
 }
 
-struct flb_wasm *flb_wasm_instantiate(struct flb_config *config, const char *wasm_path,
+struct flb_wasm *flb_wasm_instantiate(struct flb_wasm_payload *payload, struct flb_config *config, const char *wasm_path,
                                       struct mk_list *accessible_dir_list,
                                       int stdinfd, int stdoutfd, int stderrfd)
 {
     struct flb_wasm *fw;
-    uint32_t buf_size, stack_size = 8 * 1024, heap_size = 8 * 1024;
-    int8_t *buffer = NULL;
+    uint32_t stack_size = 8 * 1024, heap_size = 8 * 1024;
     char error_buf[128];
 #if WASM_ENABLE_LIBC_WASI != 0
     struct mk_list *head;
@@ -89,6 +204,10 @@ struct flb_wasm *flb_wasm_instantiate(struct flb_config *config, const char *was
     wasm_exec_env_t exec_env = NULL;
 
     RuntimeInitArgs wasm_args;
+
+    if(!flb_wasm_load_wasm_binary(payload, wasm_path)) {
+        goto error;
+    }
 
     fw = flb_malloc(sizeof(struct flb_wasm));
     if (!fw) {
@@ -123,11 +242,7 @@ struct flb_wasm *flb_wasm_instantiate(struct flb_config *config, const char *was
         return NULL;
     }
 
-    if(!flb_wasm_load_wasm_binary(wasm_path, &buffer, &buf_size)) {
-        goto error;
-    }
-
-    module = wasm_runtime_load((uint8_t *)buffer, buf_size, error_buf, sizeof(error_buf));
+    module = wasm_runtime_load(payload->buffer, payload->size, error_buf, sizeof(error_buf));
     if (!module) {
         flb_error("Load wasm module failed. error: %s", error_buf);
         goto error;
@@ -154,7 +269,6 @@ struct flb_wasm *flb_wasm_instantiate(struct flb_config *config, const char *was
         goto error;
     }
 
-    fw->buffer = buffer;
     fw->module = module;
     fw->module_inst = module_inst;
     fw->exec_env = exec_env;
@@ -181,9 +295,6 @@ error:
     }
     if (module) {
         wasm_runtime_unload(module);
-    }
-    if (buffer != NULL) {
-        BH_FREE(buffer);
     }
 
     wasm_runtime_destroy();
@@ -267,9 +378,6 @@ void flb_wasm_destroy(struct flb_wasm *fw)
     }
     if (fw->module) {
         wasm_runtime_unload(fw->module);
-    }
-    if (fw->buffer) {
-        BH_FREE(fw->buffer);
     }
     wasm_runtime_destroy();
 

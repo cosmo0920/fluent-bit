@@ -69,7 +69,7 @@ static int in_exec_wasi_collect(struct flb_input_instance *ins,
         }
     }
 
-    wasm = flb_wasm_instantiate(config, ctx->wasi_path, ctx->accessible_dir_list, -1, fileno(stdoutp), -1);
+    wasm = flb_wasm_instantiate(ctx->payload, config, ctx->wasi_path, ctx->accessible_dir_list, -1, fileno(stdoutp), -1);
     if (wasm == NULL) {
         flb_plg_debug(ctx->ins, "instantiate wasm [%s] failed", ctx->wasi_path);
         goto collect_end;
@@ -230,6 +230,10 @@ static void delete_exec_wasi_config(struct flb_exec_wasi *ctx)
         flb_pipe_close(ctx->ch_manager[1]);
     }
 
+    if (ctx->payload) {
+        flb_wasm_payload_destroy(ctx->payload);
+    }
+
     flb_free(ctx);
 }
 
@@ -238,6 +242,7 @@ static int in_exec_wasi_init(struct flb_input_instance *in,
                         struct flb_config *config, void *data)
 {
     struct flb_exec_wasi *ctx = NULL;
+    struct flb_wasm_payload *payload = NULL;
     int ret = -1;
 
     /* Allocate space for the configuration */
@@ -254,6 +259,11 @@ static int in_exec_wasi_init(struct flb_input_instance *in,
     }
 
     flb_wasm_init(config);
+    payload = flb_wasm_payload_create(config);
+    if (!payload) {
+        goto init_error;
+    }
+    ctx->payload = payload;
 
     ctx->buf = flb_malloc(ctx->buf_size);
     if (ctx->buf == NULL) {
