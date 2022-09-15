@@ -18,14 +18,28 @@
  *  limitations under the License.
  */
 
-#ifndef FLB_TEST_INTERNAL_H
-#define FLB_TEST_INTERNAL_H
+#ifndef FLB_INITALIZE_TLS_H
+#define FLB_INITALIZE_TLS_H
 
-#include "../include/flb_initialize_tls.h"
-#define TEST_INIT { flb_test_env_config_init(); }
-#define TEST_FINI { flb_test_env_config_destroy(); }
+#include <fluent-bit/flb_config.h>
+#include <fluent-bit/flb_mem.h>
 
-#include "../lib/acutest/acutest.h"
-#define FLB_TESTS_DATA_PATH "@FLB_TESTS_DATA_PATH@"
+struct flb_config *test_env_config;
+
+static inline void flb_test_env_config_init(void)
+{
+    test_env_config = flb_config_init();
+
+    if (test_env_config == NULL) {
+        return;
+    }
+
+    return;
+}
+
+static inline void flb_test_env_config_destroy(void) {
+    flb_config_exit(test_env_config);
+    return;
+}
 
 #endif
