@@ -26,20 +26,30 @@
 
 struct flb_config *test_env_config;
 
-static inline void flb_test_env_config_init(void)
+static void flb_test_logger_env_create()
 {
-    test_env_config = flb_config_init();
+    test_env_config = flb_calloc(1, sizeof(struct flb_config));
+    if (!test_env_config) {
+        flb_errno();
+        return;
+    }
 
-    if (test_env_config == NULL) {
+    /* Initialize linked lists */
+    mk_list_init(&test_env_config->workers);
+
+    if (flb_log_create(test_env_config, FLB_LOG_STDERR, FLB_LOG_INFO, NULL) == NULL) {
+        free(test_env_config);
         return;
     }
 
     return;
 }
 
-static inline void flb_test_env_config_destroy(void) {
-    flb_config_exit(test_env_config);
-    return;
+static void flb_test_logger_env_destroy()
+{
+    flb_log_destroy(test_env_config->log, test_env_config);
+    flb_worker_exit(test_env_config);
+    free(test_env_config);
 }
 
 #endif
