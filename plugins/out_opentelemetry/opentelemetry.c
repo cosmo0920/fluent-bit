@@ -31,6 +31,9 @@
 #include "opentelemetry.h"
 #include "opentelemetry_conf.h"
 
+/* Define shared variable for opentelemetry protobuf */
+const ProtobufCMessageDescriptor opentelemetry__proto__common__v1__instrumentation_scope__descriptor;
+
 static int http_post(struct opentelemetry_context *ctx,
                      const void *body, size_t body_len,
                      const char *tag, int tag_len,

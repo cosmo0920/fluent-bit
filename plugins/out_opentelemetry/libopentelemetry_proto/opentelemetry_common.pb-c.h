@@ -21,10 +21,10 @@ typedef struct _Opentelemetry__Proto__Common__V1__InstrumentationScope Opentelem
 
 
 /* --- messages --- */
- 
+
 /*
  * InstrumentationScope is a message representing the instrumentation scope information
- * such as the fully qualified name and version. 
+ * such as the fully qualified name and version.
  */
 struct  _Opentelemetry__Proto__Common__V1__InstrumentationScope
 {
@@ -67,7 +67,6 @@ typedef void (*Opentelemetry__Proto__Common__V1__InstrumentationScope__Closure)
                       void *user_data);
 
 /* --- services --- */
-
 
 /* --- descriptors --- */
 
