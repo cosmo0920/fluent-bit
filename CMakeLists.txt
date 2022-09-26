@@ -885,11 +885,16 @@ if(FLB_IN_KAFKA OR FLB_OUT_KAFKA)
     add_subdirectory(${FLB_PATH_LIB_RDKAFKA} EXCLUDE_FROM_ALL)
 endif()
 
-# Onigmo (Regex Engine)
+# Onigmo (Regex Engine) options
 # =====================
 if(FLB_REGEX)
-  include(cmake/onigmo.cmake)
+  option(ONIGMO_SHARED_LIB    OFF)
+  option(ONIGMO_CTESTS        OFF)
+  option(ONIGMO_CTESTS_SAMPLE OFF)
+  option(ONIGMO_PYTHON_TESTS  OFF)
   FLB_DEFINITION(FLB_HAVE_REGEX)
+
+  add_subdirectory(${FLB_PATH_LIB_ONIGMO} EXCLUDE_FROM_ALL)
 endif()
 
 # tutf8e (UTF8 Encoding)
