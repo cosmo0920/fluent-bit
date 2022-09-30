@@ -21,7 +21,7 @@
 #include <monkey/mk_http_status.h>
 #include <monkey/mk_http.h>
 #include <fluent-bit/flb_base64.h>
-#include <fluent-bit/flb_sha512.h>
+#include <fluent-bit/flb_hash.h>
 #include <fluent-bit/flb_info.h>
 #include <fluent-bit/flb_pack.h>
 #include <fluent-bit/flb_sds.h>
@@ -68,7 +68,7 @@ static int auth_validate(const char *credentials, unsigned int len,
     struct mk_list *tmp;
     struct mk_list *head;
     struct flb_sp_credential *cred;
-    struct flb_sha512 sha512;
+    struct flb_hash sha512;
     uint8_t buf[64] = { 0 };
     char sha512hex[128] = { 0 };
 
@@ -99,9 +99,10 @@ static int auth_validate(const char *credentials, unsigned int len,
     }
 
     /* Get SHA512 hash */
-    flb_sha512_init(&sha512);
-    flb_sha512_update(&sha512, (unsigned char *) decoded + sep + 1, auth_len - (sep + 1));
-    flb_sha512_sum(&sha512, buf);
+    flb_hash_init(&sha512, FLB_HASH_SHA512);
+    flb_hash_update(&sha512, (unsigned char *) decoded + sep + 1, auth_len - (sep + 1));
+    flb_hash_finalize(&sha512, buf, sizeof(buf));
+    flb_hash_cleanup(&sha512);
     sha512_buf_to_hex(buf, sha512hex);
 
     mk_list_foreach_safe(head, tmp, &creds->credentials) {
