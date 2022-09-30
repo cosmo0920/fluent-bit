@@ -169,7 +169,7 @@ void flb_sp_stream_destroy(struct flb_sp_stream *stream, struct flb_sp *sp)
 
     in = stream->in;
     mk_list_foreach(head, &in->collectors) {
-        coll = mk_list_entry(head, struct flb_input_collector, _head_ins);
+        coll = mk_list_entry(head, struct flb_input_collector, _head);
 
         if (flb_input_collector_pause(coll->id, in) == -1) {
             flb_error("[input] error pausing collector #%i: %s",
