@@ -76,6 +76,8 @@ struct flb_forward_config {
     flb_sds_t tag;               /* Overwrite tag on forward */
     int empty_shared_key;        /* use an empty string as shared key */
     int require_ack_response;    /* Require acknowledge for "chunk" */
+    int always_forward_as_array; /* Use msgpack array even if
+                                  * trace or metrics type of events */
     int send_options;            /* send options in messages */
     flb_sds_t unix_path;         /* unix socket path */
     int       unix_fd;

@@ -1116,7 +1116,13 @@ static int flush_forward_mode(struct flb_forward *ctx,
         }
         else {
             /* FLB_EVENT_TYPE_METRICS and FLB_EVENT_TYPE_TRACES */
-            msgpack_pack_bin(&mp_pck, bytes);
+            if (fc->always_forward_as_array) {
+                entries = flb_mp_count(data, bytes);
+                msgpack_pack_array(&mp_pck, entries);
+            }
+            else {
+                msgpack_pack_bin(&mp_pck, bytes);
+            }
         }
     }
 
@@ -1438,6 +1444,11 @@ static struct flb_config_map config_map[] = {
      FLB_CONFIG_MAP_BOOL, "require_ack_response", "false",
      0, FLB_TRUE, offsetof(struct flb_forward_config, require_ack_response),
      "Require that remote endpoint confirms data reception"
+    },
+    {
+     FLB_CONFIG_MAP_BOOL, "always_forward_as_array", "false",
+     0, FLB_TRUE, offsetof(struct flb_forward_config, always_forward_as_array),
+     "Use that Array representation for payloads of traces and cmetrics events"
     },
     {
      FLB_CONFIG_MAP_STR, "username", "",
