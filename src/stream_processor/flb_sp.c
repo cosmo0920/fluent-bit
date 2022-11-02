@@ -189,14 +189,14 @@ static int sp_credential_config_file(struct flb_config *config,
         password = NULL;
 
         /* user */
-        user = flb_cf_section_property_get(cf, section, "user");
+        user = flb_cf_section_property_get_string(cf, section, "user");
         if (!user) {
             flb_error("[sp] credentials 'user' not found in file '%s'", cfg);
             goto fconf_error;
         }
 
         /* password */
-        password = flb_cf_section_property_get(cf, section, "password");
+        password = flb_cf_section_property_get_string(cf, section, "password");
         if (!password) {
             flb_error("[sp] credentials 'password' not found in file %s", cfg);
             goto fconf_error;
