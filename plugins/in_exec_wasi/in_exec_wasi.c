@@ -85,10 +85,10 @@ static int in_exec_wasi_collect(struct flb_input_instance *ins,
     }
     ctx->wasm = wasm;
 
-    ret = flb_wasm_call_wasi_main(ctx->wasm);
+    ret = flb_wasm_call_wasi_main(ctx->wasm, ctx->wasi_args);
 
-    if (!ret) {
-        flb_plg_error(ctx->ins, "WASI main function is not found");
+    if (ret < 0) {
+        flb_plg_error(ctx->ins, "WASI main function is not found with ret: %d", ret);
         goto collect_end;
     }
 
@@ -369,6 +369,11 @@ static struct flb_config_map config_map[] = {
       FLB_CONFIG_MAP_BOOL, "bool", "false",
       0, FLB_TRUE, offsetof(struct flb_exec_wasi, oneshot),
       "execute the command only once"
+    },
+    {
+      FLB_CONFIG_MAP_CLIST, "args", NULL,
+      0, FLB_TRUE, offsetof(struct flb_exec_wasi, wasi_args),
+      "Address Pool for WASI sockets"
     },
 #ifdef FLB_WASI_SOCKETS
     {

@@ -58,7 +58,7 @@ char *flb_wasm_call_function_format_json(struct flb_wasm *fw, const char *functi
                                          const char* tag_data, size_t tag_len,
                                          struct flb_time t,
                                          const char* record_data, size_t record_len);
-int flb_wasm_call_wasi_main(struct flb_wasm *fw);
+int flb_wasm_call_wasi_main(struct flb_wasm *fw, struct mk_list *wasi_args);
 void flb_wasm_buffer_free(struct flb_wasm *fw);
 void flb_wasm_destroy(struct flb_wasm *fw);
 int flb_wasm_destroy_all(struct flb_config *ctx);

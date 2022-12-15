@@ -285,17 +285,66 @@ char *flb_wasm_call_function_format_json(struct flb_wasm *fw, const char *functi
     return (char *)flb_strdup(func_result);
 }
 
-int flb_wasm_call_wasi_main(struct flb_wasm *fw)
+int flb_wasm_call_wasi_main(struct flb_wasm *fw, struct mk_list *wasi_args)
 {
 #if WASM_ENABLE_LIBC_WASI != 0
     wasm_function_inst_t func = NULL;
+    int i = 0, len = 0;
+    int arg_num = 0;
+    uint32_t *args = {0};
+    struct mk_list *head;
+    struct flb_slist_entry *entry;
+    char *buffer = NULL;
 
-    if (!(func = wasm_runtime_lookup_wasi_start_function(fw->module_inst))) {
-        flb_error("The wasi mode main function is not found.");
-        return -1;
+    if (wasi_args != NULL && mk_list_size(wasi_args) > 0) {
+        args = (uint32_t *)flb_calloc(mk_list_size(wasi_args), sizeof(uint32_t *));
+        if (!args) {
+            flb_warn("[wasm] could not allocate memory");
+            return -1;
+        }
+
+        mk_list_foreach(head, wasi_args) {
+            entry = mk_list_entry(head, struct flb_slist_entry, _head);
+            len = strlen(entry->str)+1;
+            args[arg_num] = wasm_runtime_module_dup_data(fw->module_inst, entry->str, len);
+            flb_debug("add %s to WASI program's commandline argument(s)", entry->str);
+            arg_num++;
+        }
     }
 
-    return wasm_runtime_call_wasm(fw->exec_env, func, 0, NULL);
+    if (!(func = wasm_runtime_lookup_wasi_start_function(fw->module_inst))) {
+        const char *exception = wasm_runtime_get_exception(fw->module_inst);
+        flb_error("The wasi mode main function is not found with error: %s", exception);
+        wasm_runtime_clear_exception(fw->module_inst);
+
+        goto error;
+    }
+
+    if (!wasm_runtime_call_wasm(fw->exec_env, func, arg_num, args)) {
+        const char *exception = wasm_runtime_get_exception(fw->module_inst);
+        flb_error("The wasi mode main function is not called properly with error: %s", exception);
+        wasm_runtime_clear_exception(fw->module_inst);
+
+        goto error;
+    }
+
+    for (i = 0; i < arg_num; i++) {
+        wasm_runtime_module_free(fw->module_inst, args[i]);
+    }
+    if (args != NULL) {
+        flb_free(args);
+    }
+
+    return 0;
+error:
+    for (i = 0; i < arg_num; i++) {
+        wasm_runtime_module_free(fw->module_inst, args[i]);
+    }
+    if (args != NULL) {
+        flb_free(args);
+    }
+
+    return -2;
 #else
     return -1;
 #endif

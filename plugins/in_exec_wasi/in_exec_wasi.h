@@ -48,6 +48,7 @@ struct flb_exec_wasi {
     int interval_sec;
     int interval_nsec;
     struct mk_list *address_pool;
+    struct mk_list *wasi_args;
 };
 
 #endif /* FLB_IN_EXEC_WASI_H */
