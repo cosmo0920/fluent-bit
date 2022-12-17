@@ -89,6 +89,16 @@ set (WAMR_ROOT_DIR ../../${FLB_PATH_LIB_WASM_MICRO_RUNTIME})
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 add_library(vmlib-static STATIC ${WAMR_RUNTIME_LIB_SOURCE})
 
+# The following flags are to enhance security, but it may impact performance,
+# we disable them by default.
+if (FLB_WASM_STACK_PROTECT)
+  if (WAMR_BUILD_TARGET MATCHES "X86_.*" OR WAMR_BUILD_TARGET STREQUAL "AMD_64")
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ftrapv -D_FORTIFY_SOURCE=2")
+  endif ()
+  set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector-strong --param ssp-buffer-size=4")
+  set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-z,noexecstack,-z,relro,-z,now")
+endif()
+
 # Application related
 include (${SHARED_DIR}/utils/uncommon/shared_uncommon.cmake)
 
