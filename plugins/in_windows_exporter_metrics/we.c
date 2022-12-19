@@ -34,6 +34,7 @@
 #include "we_net.h"
 #include "we_logical_disk.h"
 #include "we_cs.h"
+#include "we_pdh_system.h"
 
 static void update_metrics(struct flb_input_instance *ins, struct flb_we *ctx)
 {
@@ -62,6 +63,7 @@ static void update_metrics(struct flb_input_instance *ins, struct flb_we *ctx)
     we_wmi_thermalzone_update(ctx);
     we_wmi_cpu_info_update(ctx);
     we_wmi_logon_update(ctx);
+    we_pdh_system_update(ctx);
 }
 
 /*
@@ -211,6 +213,12 @@ static int in_we_init(struct flb_input_instance *in,
         return -1;
     }
 
+    /* Initialize system metric collectors */
+    ret = we_pdh_system_init(ctx);
+    if (ret) {
+        return -1;
+    }
+
     return 0;
 }
 
@@ -229,6 +237,7 @@ static int in_we_exit(void *data, struct flb_config *config)
     we_net_exit(ctx);
     we_logical_disk_exit(ctx);
     we_cs_exit(ctx);
+    we_pdh_system_exit(ctx);
 
     flb_we_config_destroy(ctx);
 

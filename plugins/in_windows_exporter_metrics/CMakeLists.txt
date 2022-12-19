@@ -6,6 +6,8 @@ set(src
   we_net.c
   we_logical_disk.c
   we_cs.c
+  we_pdh.c
+  we_pdh_system.c
   we_wmi.c
   we_util.c
   we_metric.c
@@ -18,6 +20,7 @@ set(src
 set(libs
   wbemuuid
   netapi32
+  pdh
 )
 
 FLB_PLUGIN(in_windows_exporter_metrics "${src}" "${libs}")
