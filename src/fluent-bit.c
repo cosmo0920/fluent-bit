@@ -488,6 +488,74 @@ static void flb_signal_handler_break_loop(int signal)
     exit_signal = signal;
 }
 
+#ifndef FLB_SYSTEM_WINDOWS
+static struct flb_cf *service_configure(struct flb_cf *cf,
+                                        struct flb_config *config, char *file);
+
+static void flb_ctx_reload(int signal)
+{
+    int ret;
+    char *cfg_file;
+
+    /* config format context */
+    struct flb_cf *cf;
+    struct flb_cf *tmp;
+
+    cfg_file = flb_strdup(config->cfg_file);
+
+    flb_stop(ctx);
+    flb_destroy(ctx);
+
+    sleep(1);
+
+    /* Re-create Fluent Bit context */
+    ctx = flb_create();
+    if (!ctx) {
+        exit(EXIT_FAILURE);
+    }
+
+    config = ctx->config;
+    config->cfg_file = cfg_file;
+    cf = config->cf_main;
+
+    /* Validate config file */
+#ifndef FLB_HAVE_STATIC_CONF
+
+    if (config->cfg_file) {
+        if (access(config->cfg_file, R_OK) != 0) {
+            flb_utils_error(FLB_ERR_CFG_FILE);
+        }
+    }
+
+    /* Load the service configuration file */
+    tmp = service_configure(cf, config, config->cfg_file);
+    if (!tmp) {
+        flb_utils_error(FLB_ERR_CFG_FILE_STOP);
+    }
+#else
+    tmp = service_configure(cf, config, "fluent-bit.conf");
+    if (!tmp) {
+        flb_utils_error(FLB_ERR_CFG_FILE_STOP);
+    }
+
+    /* destroy previous context and override */
+    flb_cf_destroy(cf);
+    config->cf_main = tmp;
+    cf = tmp;
+#endif
+
+    ret = flb_start(ctx);
+    if (ret != 0) {
+        flb_destroy(ctx);
+        fprintf(stderr, "could not reload config from '%s'\n",
+                config->cfg_file);
+        exit(EXIT_FAILURE);
+    }
+
+    return;
+}
+#endif
+
 static void flb_signal_exit(int signal)
 {
     int len;
@@ -564,6 +632,7 @@ static void flb_signal_handler(int signal)
         flb_print_signal(SIGQUIT);
         flb_print_signal(SIGHUP);
         flb_print_signal(SIGCONT);
+        flb_print_signal(SIGUSR1);
 #endif
         flb_print_signal(SIGTERM);
         flb_print_signal(SIGSEGV);
@@ -581,6 +650,10 @@ static void flb_signal_handler(int signal)
 #ifndef FLB_SYSTEM_WINDOWS
     case SIGCONT:
         flb_dump(ctx->config);
+        break;
+    case SIGUSR1:
+        flb_ctx_reload(signal);
+        break;
 #endif
     }
 }
@@ -592,6 +665,7 @@ static void flb_signal_init()
     signal(SIGQUIT, &flb_signal_handler_break_loop);
     signal(SIGHUP,  &flb_signal_handler_break_loop);
     signal(SIGCONT, &flb_signal_handler);
+    signal(SIGUSR1, &flb_signal_handler);
 #endif
     signal(SIGTERM, &flb_signal_handler_break_loop);
     signal(SIGSEGV, &flb_signal_handler);
@@ -993,6 +1067,7 @@ int flb_main(int argc, char **argv)
             break;
         case 'c':
             cfg_file = flb_strdup(optarg);
+            config->cfg_file = cfg_file;
             break;
 #ifdef FLB_HAVE_FORK
         case 'd':
@@ -1171,16 +1246,14 @@ int flb_main(int argc, char **argv)
     /* Validate config file */
 #ifndef FLB_HAVE_STATIC_CONF
 
-    if (cfg_file) {
-        if (access(cfg_file, R_OK) != 0) {
-            flb_free(cfg_file);
+    if (config->cfg_file) {
+        if (access(config->cfg_file, R_OK) != 0) {
             flb_utils_error(FLB_ERR_CFG_FILE);
         }
     }
 
     /* Load the service configuration file */
-    tmp = service_configure(cf, config, cfg_file);
-    flb_free(cfg_file);
+    tmp = service_configure(cf, config, config->cfg_file);
     if (!tmp) {
         flb_utils_error(FLB_ERR_CFG_FILE_STOP);
     }

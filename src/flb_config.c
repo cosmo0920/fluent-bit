@@ -415,6 +415,11 @@ void flb_config_exit(struct flb_config *config)
         flb_free(config->conf_path);
     }
 
+    /* Conf cfg_file */
+    if (config->cfg_file) {
+        flb_free(config->cfg_file);
+    }
+
     /* Working directory */
     if (config->workdir) {
         flb_free(config->workdir);

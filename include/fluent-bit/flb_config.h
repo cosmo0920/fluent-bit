@@ -87,6 +87,7 @@ struct flb_config {
      * absolute path for the directory that contains the file.
      */
     char *conf_path;
+    char *cfg_file;
 
     /* Event */
     struct mk_event event_flush;
