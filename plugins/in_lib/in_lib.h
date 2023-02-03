@@ -23,8 +23,7 @@
 #include <fluent-bit/flb_config.h>
 #include <fluent-bit/flb_input.h>
 #include <fluent-bit/flb_pack.h>
-
-#include <pthread.h>
+#include <fluent-bit/flb_pthread.h>
 
 #define LIB_BUF_CHUNK   65536
 
