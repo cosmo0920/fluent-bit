@@ -47,6 +47,7 @@ struct flb_exec_wasi {
     flb_pipefd_t ch_manager[2];
     int interval_sec;
     int interval_nsec;
+    int coll_fd;
 };
 
 #endif /* FLB_IN_EXEC_WASI_H */
