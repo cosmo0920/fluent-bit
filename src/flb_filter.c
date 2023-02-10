@@ -442,6 +442,19 @@ int flb_filter_plugin_property_check(struct flb_filter_instance *ins,
     return 0;
 }
 
+int flb_filter_match_property_existence(struct flb_filter_instance *ins)
+{
+    if (!ins->match
+#ifdef FLB_HAVE_REGEX
+              && !ins->match_regex
+#endif
+        ) {
+        return FLB_FALSE;
+    }
+
+    return FLB_TRUE;
+}
+
 /* Initialize all filter plugins */
 int flb_filter_init_all(struct flb_config *config)
 {
@@ -457,11 +470,7 @@ int flb_filter_init_all(struct flb_config *config)
     mk_list_foreach_safe(head, tmp, &config->filters) {
         ins = mk_list_entry(head, struct flb_filter_instance, _head);
 
-        if (!ins->match
-#ifdef FLB_HAVE_REGEX
-            && !ins->match_regex
-#endif
-            ) {
+        if (flb_filter_match_property_existence(ins) == FLB_FALSE) {
             flb_warn("[filter] NO match rule for %s filter instance, unloading.",
                      ins->name);
             flb_filter_instance_destroy(ins);

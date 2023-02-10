@@ -119,6 +119,7 @@ void flb_filter_do(struct flb_input_chunk *ic,
                    const char *tag, int tag_len,
                    struct flb_config *config);
 const char *flb_filter_name(struct flb_filter_instance *ins);
+int flb_filter_match_property_existence(struct flb_filter_instance *ins);
 int flb_filter_plugin_property_check(struct flb_filter_instance *ins,
                                      struct flb_config *config);
 int flb_filter_init_all(struct flb_config *config);
