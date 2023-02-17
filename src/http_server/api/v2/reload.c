@@ -50,13 +50,13 @@ static void cb_reload(mk_request_t *request, void *data)
     msgpack_pack_str_body(&mp_pck, "reload", 6);
 
 #ifdef FLB_SYSTEM_WINDOWS
-    ret = -1;
+    ret = GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, (DWORD) _getpid());
 
-    msgpack_pack_str(&mp_pck, 11);
-    msgpack_pack_str_body(&mp_pck, "unsupported", 11);
+    msgpack_pack_str(&mp_pck, 4);
+    msgpack_pack_str_body(&mp_pck, "done", 4);
     msgpack_pack_str(&mp_pck, 6);
     msgpack_pack_str_body(&mp_pck, "status", 6);
-    msgpack_pack_int64(&mp_pck, ret);
+    msgpack_pack_int64(&mp_pck, ret != 0);
 #else
     ret = kill(getpid(), SIGHUP);
     if (ret != 0) {

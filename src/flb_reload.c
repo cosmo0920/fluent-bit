@@ -454,5 +454,8 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
 
     ret = flb_start(new_ctx);
 
+    /* Setup the current context format context */
+    flb_cf_context_set(cf_opts);
+
     return 0;
 }

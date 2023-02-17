@@ -487,6 +487,42 @@ static void flb_help_plugin(int rc, int format,
     write (STDERR_FILENO, #X ")\n", sizeof(#X ")\n")-1); \
     break;
 
+#ifdef FLB_SYSTEM_WINDOWS
+static int flb_ctrl_handler_routine(DWORD ct)
+{
+    switch (ct) {
+    case CTRL_BREAK_EVENT:
+        struct flb_cf *cf_opts = flb_cf_context_get();
+        flb_ctx_t *ctx = flb_context_get();
+
+
+        flb_reload(ctx, cf_opts);
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+static int flb_set_ctrl_signal_handler()
+{
+    if (!SetConsoleCtrlHandler((PHANDLER_ROUTINE)flb_ctrl_handler_routine, TRUE)) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static int flb_clear_ctrl_signal_handler()
+{
+    if (!SetConsoleCtrlHandler((PHANDLER_ROUTINE)flb_ctrl_handler_routine, FALSE)) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+#endif
+
 static void flb_signal_handler_break_loop(int signal)
 {
     exit_signal = signal;
@@ -1088,6 +1124,10 @@ int flb_main(int argc, char **argv)
     /* Store the current config format context from command line */
     flb_cf_context_set(cf_opts);
 
+#ifdef FLB_SYSTEM_WINDOWS
+    flb_set_ctrl_signal_handler();
+#endif
+
     /*
      * Always re-set the original context that was started, note that during a flb_start() a 'reload' could happen so the context
      * will be different. Use flb_context_get() to get the current context.
@@ -1105,6 +1145,11 @@ int flb_main(int argc, char **argv)
         flb_signal_exit(exit_signal);
     }
     ret = config->exit_status_code;
+
+
+#ifdef FLB_SYSTEM_WINDOWS
+    flb_clear_ctrl_signal_handler();
+#endif
 
     cf_opts = flb_cf_context_get();
 
