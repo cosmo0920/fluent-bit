@@ -74,6 +74,14 @@ set(src
   flb_reload.c
   )
 
+# Thread Local Storage for Windows
+if (FLB_SYSTEM_WINDOWS)
+  set(src
+    ${src}
+    win32/win32_tls.c
+  )
+endif()
+
 # Config format
 set(src
   ${src}

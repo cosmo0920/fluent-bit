@@ -492,9 +492,11 @@ static int flb_ctrl_handler_routine(DWORD ct)
 {
     switch (ct) {
     case CTRL_BREAK_EVENT:
-        struct flb_cf *cf_opts = flb_cf_context_get();
         flb_ctx_t *ctx = flb_context_get();
+        struct flb_cf *cf_opts = flb_cf_context_get();
 
+        flb_info("[bin] ctx %p", ctx);
+        flb_info("[bin] cf_opts %p", cf_opts);
 
         flb_reload(ctx, cf_opts);
 

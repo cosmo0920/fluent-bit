@@ -48,6 +48,16 @@
 struct flb_aws_error_reporter *error_reporter;
 #endif
 
+#ifdef FLB_SYSTEM_WINDOWS
+extern int win32_tls_create(DWORD *key);
+extern void *win32_tls_get(DWORD key);
+extern void win32_tls_set(DWORD key, void *ptr);
+extern int win32_tls_delete(DWORD key);
+
+static DWORD flb_tls_current_ctx_key;
+static DWORD flb_tls_current_cf_key;
+#endif
+
 /* thread initializator */
 static pthread_once_t flb_lib_once = PTHREAD_ONCE_INIT;
 
@@ -128,8 +138,13 @@ void flb_init_env()
     flb_downstream_init();
     flb_output_prepare();
 
+#ifdef FLB_SYSTEM_WINDOWS
+    win32_tls_create(&flb_tls_current_ctx_key);
+    win32_tls_create(&flb_tls_current_cf_key);
+#else
     pthread_key_create(&flb_lib_active_context, NULL);
     pthread_key_create(&flb_lib_active_cf_context, NULL);
+#endif
 
     /* libraries */
     cmt_initialize();
@@ -771,26 +786,41 @@ int flb_stop(flb_ctx_t *ctx)
 
 void flb_context_set(flb_ctx_t *ctx)
 {
+#ifdef FLB_SYSTEM_WINDOWS
+    win32_tls_set(flb_tls_current_ctx_key, (void *)ctx);
+#else
     pthread_setspecific(flb_lib_active_context, ctx);
+#endif
 }
 
 flb_ctx_t *flb_context_get()
 {
     flb_ctx_t *ctx;
-
+#ifdef FLB_SYSTEM_WINDOWS
+    ctx = (flb_ctx_t *)win32_tls_get(flb_tls_current_ctx_key);
+#else
     ctx = (flb_ctx_t *) pthread_getspecific(flb_lib_active_context);
+#endif
     return ctx;
 }
 
 void flb_cf_context_set(struct flb_cf *cf)
 {
+#ifdef FLB_SYSTEM_WINDOWS
+    win32_tls_set(flb_tls_current_cf_key, (void *)cf);
+#else
     pthread_setspecific(flb_lib_active_cf_context, cf);
+#endif
 }
 
 struct flb_cf *flb_cf_context_get()
 {
     struct flb_cf *cf;
 
+#ifdef FLB_SYSTEM_WINDOWS
+    cf = (struct flb_cf *) win32_tls_get(flb_tls_current_cf_key);
+#else
     cf = (struct flb_cf *) pthread_getspecific(flb_lib_active_cf_context);
+#endif
     return cf;
 }
