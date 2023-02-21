@@ -52,6 +52,7 @@
 #include <fluent-bit/flb_upstream.h>
 #include <fluent-bit/flb_downstream.h>
 #include <fluent-bit/flb_ring_buffer.h>
+#include <fluent-bit/flb_reload.h>
 
 #ifdef FLB_HAVE_METRICS
 #include <fluent-bit/flb_metrics_exporter.h>
@@ -789,6 +790,9 @@ int flb_engine_start(struct flb_config *config)
     config->metrics = flb_me_create(config);
 #endif
 
+    /* Initialize reloading context */
+    config->reload_ctx = flb_reload_context_create(config);
+
     /* Initialize HTTP Server */
 #ifdef FLB_HAVE_HTTP_SERVER
     if (config->http_server == FLB_TRUE) {
@@ -1051,6 +1055,10 @@ int flb_engine_shutdown(struct flb_config *config)
         flb_me_destroy(config->metrics);
     }
 #endif
+
+    if (config->reload_ctx) {
+        flb_reload_context_destroy(config->reload_ctx);
+    }
 
 #ifdef FLB_HAVE_HTTP_SERVER
     if (config->http_server == FLB_TRUE) {
