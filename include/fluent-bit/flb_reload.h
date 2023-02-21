@@ -24,20 +24,39 @@
 #include <fluent-bit/flb_lib.h>
 #include <fluent-bit/flb_config.h>
 #include <fluent-bit/flb_config_format.h>
+#include <fluent-bit/flb_macros.h>
+#include <fluent-bit/flb_thread_storage.h>
+#include <fluent-bit/flb_worker.h>
+
+#define FLB_RELOAD_CONTEXT_EVENT    MK_EVENT_NOTIFICATION
+
+#define FLB_RELOAD_WORKER  (uint32_t) 1
+
+#define FLB_RELOAD_EVENT   (uint32_t) 1
+#define FLB_RELOAD_EXIT    (uint32_t) 2
+
+/* FIXME: this extern should be auto-populated from flb_thread_storage.h */
+extern FLB_TLS_DEFINE(struct flb_reload_ctx, reload_ctx)
 
 struct flb_reload_ctx {
-    struct mk_event event;
-    flb_pipefd_t signal_channels[2];
-    struct flb_config *config;
-    void *event_loop;
+    struct mk_event event;           /* reload event for manager */
+    flb_pipefd_t signal_channels[2]; /* reload channel manager   */
+    pthread_t tid;                   /* thread ID   */
+    struct mk_event_loop *evl;
+
+    /* Initialization variables */
+    int pth_init;
+    pthread_cond_t  pth_cond;
+    pthread_mutex_t pth_mutex;
 };
 
 int flb_reload_property_check_all(struct flb_config *config);
 int flb_reload_reconstruct_cf(struct flb_cf *src_cf, struct flb_cf *dest_cf);
 flb_ctx_t *flb_reload_pre_run(flb_ctx_t *ctx, struct flb_cf *cf_opts);
 int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts);
-struct flb_reload_ctx *flb_reload_context_create(struct flb_config *ctx);
+struct flb_reload_ctx *flb_reload_context_create(flb_ctx_t *ctx, struct flb_cf * cf);
 int flb_reload_context_call(struct flb_reload_ctx *reload);
+int flb_reload_context_exit(struct flb_reload_ctx *reload);
 int flb_reload_context_destroy(struct flb_reload_ctx *reload);
 
 #endif

@@ -25,6 +25,7 @@
 #include <fluent-bit/flb_input.h>
 #include <fluent-bit/flb_output.h>
 #include <fluent-bit/flb_thread_storage.h>
+#include <fluent-bit/flb_lib.h>
 
 int flb_engine_start(struct flb_config *config);
 int flb_engine_failed(struct flb_config *config);

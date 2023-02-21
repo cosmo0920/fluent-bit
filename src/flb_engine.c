@@ -72,7 +72,6 @@ extern struct flb_aws_error_reporter *error_reporter;
 
 FLB_TLS_DEFINE(struct mk_event_loop, flb_engine_evl);
 
-
 void flb_engine_evl_init()
 {
     FLB_TLS_INIT(flb_engine_evl);
@@ -90,6 +89,7 @@ void flb_engine_evl_set(struct mk_event_loop *evl)
 {
     FLB_TLS_SET(flb_engine_evl, evl);
 }
+
 
 int flb_engine_destroy_tasks(struct mk_list *tasks)
 {
@@ -591,7 +591,6 @@ static void flb_engine_drain_ring_buffer_signal_channel(flb_pipefd_t fd)
     flb_pipe_r(fd, signal_buffer, sizeof(signal_buffer));
 }
 
-
 #ifdef FLB_HAVE_IN_STORAGE_BACKLOG
 extern int sb_segregate_chunks(struct flb_config *config);
 #else
@@ -789,9 +788,6 @@ int flb_engine_start(struct flb_config *config)
 #ifdef FLB_HAVE_METRICS
     config->metrics = flb_me_create(config);
 #endif
-
-    /* Initialize reloading context */
-    config->reload_ctx = flb_reload_context_create(config);
 
     /* Initialize HTTP Server */
 #ifdef FLB_HAVE_HTTP_SERVER

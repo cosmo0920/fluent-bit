@@ -33,6 +33,7 @@
 #include <fluent-bit/flb_metrics.h>
 #include <fluent-bit/flb_upstream.h>
 #include <fluent-bit/flb_downstream.h>
+#include <fluent-bit/flb_reload.h>
 #include <fluent-bit/tls/flb_tls.h>
 
 #include <signal.h>
@@ -633,6 +634,7 @@ static void flb_lib_worker(void *data)
     struct flb_config *config;
 
     config = ctx->config;
+
     mk_utils_worker_rename("flb-pipeline");
     ret = flb_engine_start(config);
     if (ret == -1) {
@@ -650,6 +652,15 @@ double flb_time_now()
 
     flb_time_get(&t);
     return flb_time_to_double(&t);
+}
+
+static int flb_lib_reload_ctx_start(flb_ctx_t *ctx, struct flb_config *config)
+{
+    if (flb_reload_context_create(ctx, config->cf_opts) == NULL) {
+        return -1;
+    }
+
+    return 0;
 }
 
 /* Start the engine */
@@ -677,6 +688,13 @@ int flb_start(flb_ctx_t *ctx)
         return -1;
     }
     config->worker = tid;
+
+    /* Start the reloading service thread */
+    ret = flb_lib_reload_ctx_start(ctx, config);
+    if (ret == -1) {
+        flb_error("[engine] reloading thread start failed");
+        return -1;
+    }
 
     /* Wait for the started signal so we can return to the caller */
     mk_event_wait(config->ch_evl);

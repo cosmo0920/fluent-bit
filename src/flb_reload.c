@@ -39,6 +39,8 @@
 #include <cfl/cfl_variant.h>
 #include <cfl/cfl_kvlist.h>
 
+FLB_TLS_DEFINE(struct flb_reload_ctx, reload_ctx)
+
 static int flb_input_propery_check_all(struct flb_config *config)
 {
     int ret;
@@ -379,7 +381,7 @@ flb_ctx_t *flb_reload_pre_run(flb_ctx_t *ctx, struct flb_cf *cf_opts)
     old_config = ctx->config;
     if (old_config->enable_hot_reload != FLB_TRUE) {
         flb_warn("[reload] hot reloading is not enabled");
-        return -3;
+        return NULL;
     }
 
     /* Normally, we should create a service section before using this cf
@@ -416,7 +418,7 @@ flb_ctx_t *flb_reload_pre_run(flb_ctx_t *ctx, struct flb_cf *cf_opts)
         flb_cf_destroy(new_cf);
         flb_error("[reload] creating flb context is failed. Reloading is halted");
 
-        return -1;
+        return NULL;
     }
 
     new_config = new_ctx->config;
@@ -521,11 +523,92 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
     return ret;
 }
 
+static inline int handle_reload_event(flb_pipefd_t fd, struct flb_reload_ctx *reload)
+{
+    int bytes;
+    uint32_t type;
+    uint32_t operation;
+    uint64_t val;
+
+    bytes = read(fd, &val, sizeof(val));
+    if (bytes == -1) {
+        flb_errno();
+        return -1;
+    }
+
+    type   = FLB_BITS_U64_HIGH(val);
+    operation = FLB_BITS_U64_LOW(val);
+
+    if (type == FLB_RELOAD_WORKER) {
+        if (operation == FLB_RELOAD_EVENT) {
+            return FLB_RELOAD_EVENT;
+        }
+        else if (operation == FLB_RELOAD_EXIT) {
+            return FLB_RELOAD_EXIT;
+        }
+    }
+    else {
+        flb_error("[reload event loop] it happends on fd=%i, invalid type=%i", fd, type);
+        return -1;
+    }
+
+    return 0;
+}
+
+/* Watcher service of reloading */
+static void reload_worker_watcher(void *data)
+{
+    int ret;
+    int run = FLB_TRUE;
+    struct mk_event *event = NULL;
+    flb_ctx_t *ctx = data;
+    struct flb_config *config = ctx->config;
+    struct flb_reload_ctx *reload = config->reload_ctx;
+
+    FLB_TLS_INIT(reload_ctx);
+    FLB_TLS_SET(reload_ctx, reload);
+
+    flb_context_set(ctx);
+    flb_info("[reload] ctx %p", ctx);
+    flb_info("[reload] cf %p", config->cf_opts);
+
+    mk_utils_worker_rename("flb-reload-watcher");
+
+    /* Signal the caller */
+    pthread_mutex_lock(&reload->pth_mutex);
+    reload->pth_init = FLB_TRUE;
+    pthread_cond_signal(&reload->pth_cond);
+    pthread_mutex_unlock(&reload->pth_mutex);
+
+    while (run) {
+        mk_event_wait(reload->evl);
+        mk_event_foreach(event, reload->evl) {
+            if (event->type == FLB_RELOAD_CONTEXT_EVENT) {
+                ret = handle_reload_event(event->fd, reload);
+                if (ret == FLB_RELOAD_EXIT) {
+                    flb_info("[reload] stopping reloading watcher....");
+                    run = FLB_FALSE;
+                }
+                else if (ret == FLB_RELOAD_EVENT) {
+                    ctx = flb_context_get();
+                    if (flb_reload(ctx, config->cf_opts) == 0) {
+                        flb_info("[reload] reloading context via reloading watcher....");
+                    }
+                }
+            }
+        }
+    }
+
+    pthread_exit(NULL);
+}
+
 /* Create reload context */
-struct flb_reload_ctx *flb_reload_context_create(struct flb_config *config)
+struct flb_reload_ctx *flb_reload_context_create(flb_ctx_t *ctx, struct flb_cf *cf)
 {
     int ret;
     struct flb_reload_ctx *reload;
+    struct flb_config *config = ctx->config;
+    struct mk_event_loop *evl;
 
     /* Context */
     reload = flb_calloc(1, sizeof(struct flb_reload_ctx));
@@ -533,52 +616,111 @@ struct flb_reload_ctx *flb_reload_context_create(struct flb_config *config)
         flb_errno();
         return NULL;
     }
-    reload->config = config;
+    config->reload_ctx = reload;
+
+    /* Create event loop to be used by the collector worker */
+    evl = mk_event_loop_create(32);
+    if (!evl) {
+        fprintf(stderr, "[log] could not create event loop\n");
+        flb_free(reload);
+        return NULL;
+    }
+    reload->evl = evl;
 
     ret = flb_pipe_create(reload->signal_channels);
     if (ret == -1) {
+        flb_error("[reload] could not create pipe(2)");
+        mk_event_loop_destroy(reload->evl);
         flb_errno();
         return NULL;
     }
-
-    flb_pipe_set_nonblocking(reload->signal_channels[0]);
-    flb_pipe_set_nonblocking(reload->signal_channels[1]);
-
-    /* Register the reload context into the main event loop */
     MK_EVENT_ZERO(&reload->event);
 
     /* Register the read-end of the pipe (signal_channels[0]) into the event loop */
-    ret = mk_event_add(config->evl, reload->signal_channels[0],
-                       FLB_ENGINE_EV_RELOAD, MK_EVENT_READ, &reload->event);
+    ret = mk_event_add(reload->evl, reload->signal_channels[0],
+                       FLB_RELOAD_CONTEXT_EVENT, MK_EVENT_READ, &reload->event);
     if (ret == -1) {
-        flb_pipe_destroy(reload->signal_channels);
+        flb_error("[reload] could not register event\n");
+        mk_event_loop_destroy(reload->evl);
 
         return NULL;
     }
 
-    reload->event_loop = config->evl;
+    /*
+     * This lock is used for the 'pth_cond' conditional. Once the worker
+     * thread is ready will signal the condition.
+     */
+    pthread_mutex_init(&reload->pth_mutex, NULL);
+    pthread_cond_init(&reload->pth_cond, NULL);
+    reload->pth_init = FLB_FALSE;
+
+    pthread_mutex_lock(&reload->pth_mutex);
+
+    flb_context_set(ctx);
+    flb_cf_context_set(cf);
+
+    ret = mk_utils_worker_spawn(reload_worker_watcher, ctx, &reload->tid);
+    if (ret == -1) {
+        pthread_mutex_unlock(&reload->pth_mutex);
+        mk_event_loop_destroy(reload->evl);
+        flb_free(reload);
+        return NULL;
+    }
+
+    /* Block until the child thread is ready */
+    while (!reload->pth_init) {
+        pthread_cond_wait(&reload->pth_cond, &reload->pth_mutex);
+    }
+    pthread_mutex_unlock(&reload->pth_mutex);
 
     return reload;
 }
 
 int flb_reload_context_call(struct flb_reload_ctx *reload)
 {
-    uint64_t val = 0xd003;  /* dummy constant for reload */
+    int ret;
+    uint64_t val;
 
-    flb_pipe_w(reload->signal_channels[1], &val, sizeof(val));
+    /* compose message to start the reloadinf context */
+    val = FLB_BITS_U64_SET(FLB_RELOAD_WORKER,
+                           FLB_RELOAD_EVENT);
+
+    ret = flb_pipe_w(reload->signal_channels[1], &val, sizeof(val));
+    if (ret <= 0) {
+        flb_errno();
+        return -1;
+    }
+
+    return 0;
+}
+
+int flb_reload_context_exit(struct flb_reload_ctx *reload)
+{
+    int ret;
+    uint64_t val;
+
+    /* compose message to exit the reload watcher */
+    val = FLB_BITS_U64_SET(FLB_RELOAD_WORKER,
+                           FLB_RELOAD_EXIT);
+    ret = flb_pipe_w(reload->signal_channels[1], &val, sizeof(val));
+    if (ret <= 0) {
+        flb_errno();
+        return -1;
+    }
 
     return 0;
 }
 
 int flb_reload_context_destroy(struct flb_reload_ctx *reload)
 {
-    if (reload->event_loop != NULL) {
-        mk_event_del(reload->event_loop, &reload->event);
-        flb_pipe_destroy(reload->signal_channels);
+    /* Signal the child worker, stop working */
+    flb_reload_context_exit(reload);
+    pthread_cancel(reload->tid);
+    pthread_join(reload->tid, NULL);
 
-        reload->event_loop = NULL;
-    }
-
+    /* Release resources */
+    mk_event_loop_destroy(reload->evl);
+    flb_pipe_destroy(reload->signal_channels);
     flb_free(reload);
 
     return 0;
