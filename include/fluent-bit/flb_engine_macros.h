@@ -37,6 +37,8 @@
 #define FLB_ENGINE_EV_THREAD_OUTPUT 65536
 #define FLB_ENGINE_EV_THREAD_ENGINE 131072
 
+#define FLB_ENGINE_EV_RELOAD        262144
+
 /* Engine events: all engine events set the left 32 bits to '1' */
 #define FLB_ENGINE_EV_STARTED   FLB_BITS_U64_SET(1, 1) /* Engine started    */
 #define FLB_ENGINE_EV_FAILED    FLB_BITS_U64_SET(1, 2) /* Engine started    */

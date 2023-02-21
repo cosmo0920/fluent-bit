@@ -30,6 +30,8 @@
 #include <fluent-bit/flb_config_format.h>
 #include <fluent-bit/flb_utils.h>
 #include <fluent-bit/flb_plugin.h>
+#include <fluent-bit/flb_reload.h>
+#include <fluent-bit/flb_engine_macros.h>
 
 #include <cfl/cfl.h>
 #include <cfl/cfl_sds.h>
@@ -461,6 +463,69 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
     flb_info("[reload] start everything");
 
     ret = flb_start(new_ctx);
+
+    return 0;
+}
+
+/* Create reload context */
+struct flb_reload_ctx *flb_reload_context_create(struct flb_config *config)
+{
+    int ret;
+    struct flb_reload_ctx *reload;
+
+    /* Context */
+    reload = flb_calloc(1, sizeof(struct flb_reload_ctx));
+    if (!reload) {
+        flb_errno();
+        return NULL;
+    }
+    reload->config = config;
+
+    ret = flb_pipe_create(reload->signal_channels);
+    if (ret == -1) {
+        flb_errno();
+        return NULL;
+    }
+
+    flb_pipe_set_nonblocking(reload->signal_channels[0]);
+    flb_pipe_set_nonblocking(reload->signal_channels[1]);
+
+    /* Register the reload context into the main event loop */
+    MK_EVENT_ZERO(&reload->event);
+
+    /* Register the read-end of the pipe (signal_channels[0]) into the event loop */
+    ret = mk_event_add(config->evl, reload->signal_channels[0],
+                       FLB_ENGINE_EV_RELOAD, MK_EVENT_READ, &reload->event);
+    if (ret == -1) {
+        flb_pipe_destroy(reload->signal_channels);
+
+        return NULL;
+    }
+
+    reload->event_loop = config->evl;
+
+    return reload;
+}
+
+int flb_reload_context_call(struct flb_reload_ctx *reload)
+{
+    uint64_t val = 0xd003;  /* dummy constant for reload */
+
+    flb_pipe_w(reload->signal_channels[1], &val, sizeof(val));
+
+    return 0;
+}
+
+int flb_reload_context_destroy(struct flb_reload_ctx *reload)
+{
+    if (reload->event_loop != NULL) {
+        mk_event_del(reload->event_loop, &reload->event);
+        flb_pipe_destroy(reload->signal_channels);
+
+        reload->event_loop = NULL;
+    }
+
+    flb_free(reload);
 
     return 0;
 }

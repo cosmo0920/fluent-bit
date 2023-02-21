@@ -25,8 +25,18 @@
 #include <fluent-bit/flb_config.h>
 #include <fluent-bit/flb_config_format.h>
 
+struct flb_reload_ctx {
+    struct mk_event event;
+    flb_pipefd_t signal_channels[2];
+    struct flb_config *config;
+    void *event_loop;
+};
+
 int flb_reload_property_check_all(struct flb_config *config);
 int flb_reload_reconstruct_cf(struct flb_cf *src_cf, struct flb_cf *dest_cf);
 int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts);
+struct flb_reload_ctx *flb_reload_context_create(struct flb_config *ctx);
+int flb_reload_context_call(struct flb_reload_ctx *reload);
+int flb_reload_context_destroy(struct flb_reload_ctx *reload);
 
 #endif
