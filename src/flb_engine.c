@@ -523,6 +523,25 @@ static FLB_INLINE int flb_engine_handle_event(flb_pipefd_t fd, int mask,
     return 0;
 }
 
+static int handle_reload_event(flb_pipefd_t fd, struct flb_config *config)
+{
+    int ret = 0;
+    uint64_t val = 0;
+
+    ret = flb_pipe_r(fd, &val, sizeof(val));
+    if (ret <= 0 || val == 0) {
+        flb_errno();
+        return -1;
+    }
+    /* FIXME: call reloading config API here. */
+    flb_info("[engine] requested to reload config");
+    flb_info("[engine] ctx %p", flb_context_get());
+    flb_info("[engine] cf %p", flb_cf_context_get());
+    ret = flb_reload(flb_context_get(), flb_cf_context_get());
+
+    return ret;
+}
+
 static int flb_engine_started(struct flb_config *config)
 {
     uint64_t val;
@@ -998,6 +1017,13 @@ int flb_engine_start(struct flb_config *config)
 
                 rb_flush_flag = FLB_TRUE;
             }
+            else if (event->type == FLB_ENGINE_EV_RELOAD) {
+                ret = handle_reload_event(event->fd, config);
+                if (ret == 0) {
+                    return ret;
+                }
+            }
+
         }
 
         if (rb_flush_flag) {
