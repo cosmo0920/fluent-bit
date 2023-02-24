@@ -75,7 +75,8 @@ static void cb_reload(mk_request_t *request, void *data)
         msgpack_pack_int64(&mp_pck, -1);
     }
     else {
-        ret = kill(getpid(), SIGHUP);
+        ret = flb_reload_context_call(config->reload_ctx);
+        /* ret = kill(getpid(), SIGHUP); */
         if (ret != 0) {
             mk_http_status(request, 500);
             mk_http_done(request);
