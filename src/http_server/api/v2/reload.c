@@ -40,6 +40,8 @@ static void cb_reload(mk_request_t *request, void *data)
     size_t out_size;
     msgpack_packer mp_pck;
     msgpack_sbuffer mp_sbuf;
+    struct flb_hs *hs = data;
+    struct flb_config *config = hs->config;
 
     if (request->method != MK_METHOD_POST &&
         request->method != MK_METHOD_PUT) {
@@ -65,7 +67,8 @@ static void cb_reload(mk_request_t *request, void *data)
     msgpack_pack_str_body(&mp_pck, "status", 6);
     msgpack_pack_int64(&mp_pck, ret);
 #else
-    ret = kill(getpid(), SIGHUP);
+    ret = flb_reload_context_call(config->reload_ctx);
+    /* ret = kill(getpid(), SIGHUP); */
     if (ret != 0) {
         mk_http_status(request, 500);
         mk_http_done(request);
