@@ -27,6 +27,7 @@
 #include <fluent-bit/flb_time.h>
 #include <fluent-bit/flb_lib.h>
 #include <fluent-bit/flb_reload.h>
+#include <fluent-bit/flb_engine.h>
 #include "reload.h"
 
 #include <signal.h>
@@ -67,7 +68,7 @@ static void cb_reload(mk_request_t *request, void *data)
     msgpack_pack_str_body(&mp_pck, "status", 6);
     msgpack_pack_int64(&mp_pck, ret);
 #else
-    ret = flb_reload_context_call(config->reload_ctx);
+    ret = flb_engine_reload(config);
     /* ret = kill(getpid(), SIGHUP); */
     if (ret != 0) {
         mk_http_status(request, 500);

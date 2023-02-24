@@ -161,6 +161,23 @@ int flb_engine_flush(struct flb_config *config,
     return 0;
 }
 
+
+static int handle_reload_event(struct flb_config *config)
+{
+    int ret = 0;
+    flb_ctx_t *ctx;
+
+    /* FIXME: call reloading config API here. */
+    flb_info("[engine] requested to reload config");
+    ctx = flb_context_get();
+    flb_info("[engine] ctx %p", ctx);
+    flb_info("[engine] cf %p", config->cf_opts);
+    ret = flb_reload(ctx, config->cf_opts);
+    flb_info("[engine] ret %d", ret);
+
+    return ret;
+}
+
 /* Cleanup function that runs every 1.5 second */
 static void cb_engine_sched_timer(struct flb_config *ctx, void *data)
 {
@@ -462,6 +479,11 @@ static inline int flb_engine_manager(flb_pipefd_t fd, struct flb_config *config)
             flb_engine_flush(config, NULL);
             return FLB_ENGINE_STOP;
         }
+        else if (key == FLB_ENGINE_RELOADING) {
+            flb_trace("[engine] reloading is inprogress");
+            return FLB_ENGINE_RELOADING;
+        }
+
     }
 
     return 0;
@@ -488,10 +510,17 @@ static FLB_INLINE int flb_engine_handle_event(flb_pipefd_t fd, int mask,
             flb_utils_pipe_byte_consume(fd);
             return FLB_ENGINE_SHUTDOWN;
         }
+        else if (config->reload_fd == fd) {
+            flb_utils_pipe_byte_consume(fd);
+            return FLB_ENGINE_RELOAD;
+        }
         else if (config->ch_manager[0] == fd) {
             ret = flb_engine_manager(fd, config);
             if (ret == FLB_ENGINE_STOP || ret == FLB_ENGINE_EV_STOP) {
                 return FLB_ENGINE_STOP;
+            }
+            else if (ret == FLB_ENGINE_RELOADING || ret == FLB_ENGINE_EV_RELOADING) {
+                return FLB_ENGINE_RELOADING;
             }
         }
 
@@ -521,25 +550,6 @@ static FLB_INLINE int flb_engine_handle_event(flb_pipefd_t fd, int mask,
     }
 
     return 0;
-}
-
-static int handle_reload_event(flb_pipefd_t fd, struct flb_config *config)
-{
-    int ret = 0;
-    uint64_t val = 0;
-
-    ret = flb_pipe_r(fd, &val, sizeof(val));
-    if (ret <= 0 || val == 0) {
-        flb_errno();
-        return -1;
-    }
-    /* FIXME: call reloading config API here. */
-    flb_info("[engine] requested to reload config");
-    flb_info("[engine] ctx %p", flb_context_get());
-    flb_info("[engine] cf %p", flb_cf_context_get());
-    ret = flb_reload(flb_context_get(), flb_cf_context_get());
-
-    return ret;
 }
 
 static int flb_engine_started(struct flb_config *config)
@@ -623,6 +633,7 @@ int sb_segregate_chunks(struct flb_config *config)
 int flb_engine_start(struct flb_config *config)
 {
     int ret;
+    int running = FLB_TRUE;
     uint64_t ts;
     char tmp[16];
     int rb_flush_flag;
@@ -875,7 +886,7 @@ int flb_engine_start(struct flb_config *config)
         return -2;
     }
 
-    while (1) {
+    while (running) {
         rb_flush_flag = FLB_FALSE;
 
         mk_event_wait(evl); /* potentially conditional mk_event_wait or mk_event_wait_2 based on bucket queue capacity for one shot events */
@@ -962,6 +973,44 @@ int flb_engine_start(struct flb_config *config)
                         return ret;
                     }
                 }
+                else if (ret == FLB_ENGINE_RELOADING) {
+                    /*
+                     * We are preparing to reload, we give a graceful time
+                     * of 'config->grace' seconds to process any pending event.
+                     */
+                    event = &config->event_reload;
+                    event->mask = MK_EVENT_EMPTY;
+                    event->status = MK_EVENT_NONE;
+
+                    /*
+                     * Configure a timer of 1 second, on expiration the code will
+                     * jump into the FLB_ENGINE_SHUTDOWN condition where it will
+                     * check if the grace period has finished, or if there are
+                     * any remaining tasks.
+                     *
+                     * If no tasks exists, there is no need to wait for the maximum
+                     * grace period.
+                     */
+                    config->reload_fd = mk_event_timeout_create(evl,
+                                                                1,
+                                                                0,
+                                                                event);
+                    event->priority = FLB_ENGINE_PRIORITY_RELOAD;
+                }
+                else if (ret == FLB_ENGINE_RELOAD) {
+                    if (config->reload_fd > 0) {
+                        mk_event_timeout_destroy(config->evl,
+                                                 &config->event_reload);
+                    }
+
+                    ret = handle_reload_event(config);
+                    if (ret == 0) {
+                        flb_info("[engine] reloading is succeeded");
+                        running = FLB_FALSE;
+                        return ret;
+                    }
+                    flb_error("[engine] reload is failed");
+                }
             }
             else if (event->type & FLB_ENGINE_EV_SCHED) {
                 /* Event type registered by the Scheduler */
@@ -1017,13 +1066,6 @@ int flb_engine_start(struct flb_config *config)
 
                 rb_flush_flag = FLB_TRUE;
             }
-            else if (event->type == FLB_ENGINE_EV_RELOAD) {
-                ret = handle_reload_event(event->fd, config);
-                if (ret == 0) {
-                    return ret;
-                }
-            }
-
         }
 
         if (rb_flush_flag) {
@@ -1101,6 +1143,16 @@ int flb_engine_exit(struct flb_config *config)
     uint64_t val;
 
     val = FLB_ENGINE_EV_STOP;
+    ret = flb_pipe_w(config->ch_manager[1], &val, sizeof(uint64_t));
+    return ret;
+}
+
+int flb_engine_reload(struct flb_config *config)
+{
+    int ret;
+    uint64_t val;
+
+    val = FLB_ENGINE_EV_RELOADING;
     ret = flb_pipe_w(config->ch_manager[1], &val, sizeof(uint64_t));
     return ret;
 }

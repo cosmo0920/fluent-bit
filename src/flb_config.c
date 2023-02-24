@@ -193,6 +193,7 @@ struct flb_config *flb_config_init()
     MK_EVENT_ZERO(&config->ch_event);
     MK_EVENT_ZERO(&config->event_flush);
     MK_EVENT_ZERO(&config->event_shutdown);
+    MK_EVENT_ZERO(&config->event_reload);
 
     /* is data ingestion active ? */
     config->is_ingestion_active = FLB_TRUE;
@@ -893,4 +894,3 @@ int flb_config_load_config_format(struct flb_config *config, struct flb_cf *cf)
 
     return 0;
 }
-

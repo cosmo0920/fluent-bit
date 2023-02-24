@@ -60,6 +60,8 @@ struct flb_config {
     int daemon;               /* Run as a daemon ?              */
     flb_pipefd_t shutdown_fd; /* Shutdown FD, 5 seconds         */
 
+    flb_pipefd_t reload_fd; /* Reload FD, 5 seconds         */
+
     int verbose;           /* Verbose mode (default OFF)     */
     time_t init_time;      /* Time when Fluent Bit started   */
 
@@ -100,6 +102,7 @@ struct flb_config {
     struct mk_event event_flush;
     struct mk_event event_shutdown;
     struct mk_event event_thread_init;  /* event to initiate thread in engine */
+    struct mk_event event_reload;
 
     /* Collectors */
     pthread_mutex_t collectors_mutex;

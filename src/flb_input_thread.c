@@ -389,6 +389,9 @@ static void input_thread(void *data)
                 else if (ret == FLB_ENGINE_SHUTDOWN) {
                     continue;
                 }
+                else if (ret == FLB_ENGINE_RELOAD) {
+                    continue;
+                }
             }
             else if (event->type & FLB_ENGINE_EV_SCHED) {
                 /* Event type registered by the Scheduler */
