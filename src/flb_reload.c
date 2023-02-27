@@ -359,7 +359,7 @@ static int flb_reload_reinstantiate_external_plugins(struct flb_config *src, str
     return 0;
 }
 
-int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
+flb_ctx_t *flb_reload_pre_run(flb_ctx_t *ctx, struct flb_cf *cf_opts)
 {
     int ret;
     flb_sds_t file = NULL;
@@ -373,7 +373,7 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
 
     if (ctx == NULL) {
         flb_error("[reload] given flb context is NULL");
-        return -2;
+        return NULL;
     }
 
     old_config = ctx->config;
@@ -389,7 +389,7 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
      */
     new_cf = flb_cf_create();
     if (!new_cf) {
-        return -1;
+        return NULL;
     }
 
     flb_info("reloading instance pid=%lu tid=%u", getpid(), pthread_self());
@@ -403,7 +403,7 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
                 flb_sds_destroy(file);
             }
             flb_error("[reload] reconstruct cf failed");
-            return -1;
+            return NULL;
         }
     }
 
@@ -439,7 +439,7 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
         if (!new_cf) {
             flb_sds_destroy(file);
 
-            return -1;
+            return NULL;
         }
     }
 
@@ -455,7 +455,7 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
             flb_destroy(new_ctx);
             flb_error("[reload] reloaded config is invalid. Reloading is halted");
 
-            return -1;
+            return NULL;
         }
     }
 
@@ -469,7 +469,7 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
 
         flb_error("[reload] reloaded config format is invalid. Reloading is halted");
 
-        return -1;
+        return NULL;
     }
 
     /* Validate plugin properites before fluent-bit stops the old context. */
@@ -482,7 +482,7 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
 
         flb_error("[reload] reloaded config is invalid. Reloading is halted");
 
-        return -1;
+        return NULL;
     }
 
     /* Delete the original context of config format before replacing
@@ -497,6 +497,19 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
         new_config->conf_path_file = file;
     }
 
+    return new_ctx;
+}
+
+int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
+{
+    int ret;
+    flb_ctx_t *new_ctx;
+
+    new_ctx = flb_reload_pre_run(ctx, cf_opts);
+    if (new_ctx == NULL) {
+        return -1;
+    }
+
     flb_info("[reload] stop everything of the old context");
     flb_stop(ctx);
     flb_destroy(ctx);
@@ -505,7 +518,7 @@ int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts)
 
     ret = flb_start(new_ctx);
 
-    return 0;
+    return ret;
 }
 
 /* Create reload context */

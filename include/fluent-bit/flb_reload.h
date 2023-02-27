@@ -34,6 +34,7 @@ struct flb_reload_ctx {
 
 int flb_reload_property_check_all(struct flb_config *config);
 int flb_reload_reconstruct_cf(struct flb_cf *src_cf, struct flb_cf *dest_cf);
+flb_ctx_t *flb_reload_pre_run(flb_ctx_t *ctx, struct flb_cf *cf_opts);
 int flb_reload(flb_ctx_t *ctx, struct flb_cf *cf_opts);
 struct flb_reload_ctx *flb_reload_context_create(struct flb_config *ctx);
 int flb_reload_context_call(struct flb_reload_ctx *reload);
