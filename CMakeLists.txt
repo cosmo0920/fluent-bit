@@ -197,6 +197,7 @@ option(FLB_IN_EVENT_TEST               "Enable event test plugin"               
 option(FLB_IN_STORAGE_BACKLOG          "Enable storage backlog input plugin"          Yes)
 option(FLB_IN_EMITTER                  "Enable emitter input plugin"                  Yes)
 option(FLB_IN_NODE_EXPORTER_METRICS    "Enable node exporter metrics input plugin"    Yes)
+option(FLB_IN_LOCAL_FILE_EXPORTER_METRICS "Enable local file exporter metrics input plugin"    Yes)
 option(FLB_IN_WINDOWS_EXPORTER_METRICS "Enable windows exporter metrics input plugin" Yes)
 option(FLB_IN_OPENTELEMETRY            "Enable OpenTelemetry input plugin"            Yes)
 option(FLB_IN_ELASTICSEARCH            "Enable Elasticsearch (Bulk API) input plugin" Yes)
