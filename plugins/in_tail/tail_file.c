@@ -34,6 +34,7 @@
 #include <fluent-bit/flb_regex.h>
 #include <fluent-bit/flb_hash_table.h>
 #endif
+#include <fluent-bit/flb_gzip.h>
 
 #include "tail.h"
 #include "tail_file.h"
@@ -1331,6 +1332,38 @@ static int adjust_counters(struct flb_tail_config *ctx, struct flb_tail_file *fi
     return FLB_TAIL_OK;
 }
 
+static inline int is_gzip_compressed(void *buf, ssize_t bytes)
+{
+    uint8_t *p;
+
+    if (bytes < 2) {
+        return FLB_FALSE;
+    }
+    p = buf;
+    return *p++ == 0x1F && *p++ == 0x8B;
+}
+
+static inline int is_gzip_fully_loaded(struct flb_tail_file *file, ssize_t bytes)
+{
+    int ret;
+    struct stat cst;
+    struct flb_tail_config *ctx;
+
+    ctx = file->config;
+    ret = fstat(file->fd, &cst);
+    if (ret == -1) {
+        flb_plg_error(ctx->ins, "fstat error");
+        return FLB_FALSE;
+    }
+    if (bytes < cst.st_size) {
+        flb_plg_error(ctx->ins, "Compressed file '%s' is not fully loaded. %lu bytes left",
+                      file->name, cst.st_size - bytes);
+        return FLB_FALSE;
+    }
+
+    return FLB_TRUE;
+}
+
 int flb_tail_file_chunk(struct flb_tail_file *file)
 {
     int ret;
@@ -1340,6 +1373,9 @@ int flb_tail_file_chunk(struct flb_tail_file *file)
     size_t processed_bytes;
     ssize_t bytes;
     struct flb_tail_config *ctx;
+    void *gz_data = NULL;
+    size_t gz_size = -1;
+    int processing_gzipped_file = FLB_FALSE;
 
     /* Check if we the engine issued a pause */
     ctx = file->config;
@@ -1399,9 +1435,45 @@ int flb_tail_file_chunk(struct flb_tail_file *file)
 
     bytes = read(file->fd, file->buf_data + file->buf_len, capacity);
     if (bytes > 0) {
-        /* we read some data, let the content processor take care of it */
-        file->buf_len += bytes;
-        file->buf_data[file->buf_len] = '\0';
+        if (is_gzip_compressed(file->buf_data, bytes) == FLB_TRUE) {
+            processing_gzipped_file = FLB_TRUE;
+            if (file->offset != 0) {
+                processing_gzipped_file = FLB_FALSE;
+                flb_plg_warn(ctx->ins, "resuming operation of gzip uncompression is not supported");
+                return FLB_TAIL_ERROR;
+            }
+
+            flb_plg_debug(ctx->ins, "tailing gzip compressed file = %s", file->name);
+            if (is_gzip_fully_loaded(file, bytes) == FLB_FALSE) {
+                processing_gzipped_file = FLB_FALSE;
+                return FLB_TAIL_ERROR;
+            }
+
+            ret = flb_gzip_uncompress((void *) file->buf_data, bytes,
+                                      &gz_data, &gz_size);
+            if (ret == -1) {
+                processing_gzipped_file = FLB_FALSE;
+                flb_plg_error(ctx->ins, "gzip uncompress is failed");
+                return FLB_TAIL_ERROR;
+            }
+
+            if (gz_size > ctx->buf_max_size) {
+                flb_free(gz_data);
+                processing_gzipped_file = FLB_FALSE;
+                flb_plg_error(ctx->ins, "gzip uncompressed contents is too huge. size = %lu", gz_size);
+                return FLB_TAIL_ERROR;
+            }
+
+            /* Replace contents of buf_data with gz_data. */
+            flb_free(file->buf_data);
+            file->buf_len += gz_size;
+            file->buf_data = gz_data;
+        }
+        else {
+            /* we read some data, let the content processor take care of it */
+            file->buf_len += bytes;
+            file->buf_data[file->buf_len] = '\0';
+        }
 
         /* Now that we have some data in the buffer, call the data processor
          * which aims to cut lines and register the entries into the engine.
@@ -1417,8 +1489,14 @@ int flb_tail_file_chunk(struct flb_tail_file *file)
             return FLB_TAIL_ERROR;
         }
 
-        /* Adjust the file offset and buffer */
-        file->offset += processed_bytes;
+        if (processing_gzipped_file == FLB_TRUE) {
+            /* Adjust the file offset with the original length of file */
+            file->offset += bytes;
+        }
+        else {
+            /* Adjust the file offset and buffer */
+            file->offset += processed_bytes;
+        }
         consume_bytes(file->buf_data, processed_bytes, file->buf_len);
         file->buf_len -= processed_bytes;
         file->buf_data[file->buf_len] = '\0';
