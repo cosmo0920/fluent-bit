@@ -393,9 +393,15 @@ static int process_content(struct flb_tail_file *file, size_t *bytes)
     out_sbuf = &mp_sbuf;
     out_pck  = &mp_pck;
 
-    /* Parse the data content */
-    data = file->buf_data;
-    end = data + file->buf_len;
+    if (file->compressed_len > 0) {
+        /* Parse the compressed data content */
+        data = file->compressed_data;
+        end = data + file->compressed_len;
+    } else {
+        /* Parse the data content */
+        data = file->buf_data;
+        end = data + file->buf_len;
+    }
 
     /* reset last processed bytes */
     file->last_processed_bytes = 0;
@@ -549,7 +555,12 @@ static int process_content(struct flb_tail_file *file, size_t *bytes)
         file->parsed = 0;
         file->last_processed_bytes += processed_bytes;
     }
-    file->parsed = file->buf_len;
+    if (file->compressed_len > 0) {
+        file->parsed = file->compressed_len;
+    }
+    else {
+        file->parsed = file->buf_len;
+    }
 
     if (lines > 0) {
         /* Append buffer content to a chunk */
@@ -566,7 +577,12 @@ static int process_content(struct flb_tail_file *file, size_t *bytes)
 
     }
     else if (file->skip_next) {
-        *bytes = file->buf_len;
+        if (file->compressed_len > 0) {
+            *bytes = file->compressed_len;
+        }
+        else {
+            *bytes = file->buf_len;
+        }
     }
     else {
         *bytes = processed_bytes;
@@ -1035,6 +1051,10 @@ int flb_tail_file_append(char *path, struct stat *st, int mode,
         goto error;
     }
 
+    /* Compressed buffer */
+    file->compressed_len = 0;
+    file->compressed_data = NULL;
+
     /* Initialize (optional) dynamic tag */
     if (ctx->dynamic_tag == FLB_TRUE) {
         len = ctx->ins->tag_len + strlen(path) + 1;
@@ -1118,6 +1138,9 @@ error:
         if (file->buf_data) {
             flb_free(file->buf_data);
         }
+        if (file->compressed_data) {
+            flb_free(file->compressed_data);
+        }
         if (file->name) {
             flb_free(file->name);
         }
@@ -1181,6 +1204,9 @@ void flb_tail_file_remove(struct flb_tail_file *file)
     flb_hash_table_del(ctx->event_hash, file->hash_key);
 
     flb_free(file->buf_data);
+    if (file->compressed_data) {
+        flb_free(file->compressed_data);
+    }
     flb_free(file->name);
     flb_free(file->orig_name);
     flb_free(file->real_name);
@@ -1244,6 +1270,7 @@ static int adjust_counters(struct flb_tail_config *ctx, struct flb_tail_file *fi
                       file->inode, file->name);
         file->offset = offset;
         file->buf_len = 0;
+        file->compressed_len = 0;
 
         /* Update offset in the database file */
 #ifdef FLB_HAVE_SQLDB
@@ -1303,7 +1330,6 @@ int flb_tail_file_chunk(struct flb_tail_file *file)
     struct flb_tail_config *ctx;
     void *gz_data = NULL;
     size_t gz_size = -1;
-    int processing_gzipped_file = FLB_FALSE;
 
     /* Check if we the engine issued a pause */
     ctx = file->config;
@@ -1335,6 +1361,7 @@ int flb_tail_file_chunk(struct flb_tail_file *file)
             file->offset += file->buf_len;
             file->buf_len = 0;
             file->skip_next = FLB_TRUE;
+            file->compressed_len = 0;
         }
         else {
             size = file->buf_size + ctx->buf_chunk_size;
@@ -1364,38 +1391,34 @@ int flb_tail_file_chunk(struct flb_tail_file *file)
     bytes = read(file->fd, file->buf_data + file->buf_len, capacity);
     if (bytes > 0) {
         if (is_gzip_compressed(file->buf_data, bytes) == FLB_TRUE) {
-            processing_gzipped_file = FLB_TRUE;
             if (file->offset != 0) {
-                processing_gzipped_file = FLB_FALSE;
                 flb_plg_warn(ctx->ins, "resuming operation of gzip uncompression is not supported");
                 return FLB_TAIL_ERROR;
             }
 
             flb_plg_debug(ctx->ins, "tailing gzip compressed file = %s", file->name);
             if (is_gzip_fully_loaded(file, bytes) == FLB_FALSE) {
-                processing_gzipped_file = FLB_FALSE;
                 return FLB_TAIL_ERROR;
+            }
+
+            if (file->compressed_data != NULL) {
+                flb_free(file->compressed_data);
             }
 
             ret = flb_gzip_uncompress((void *) file->buf_data, bytes,
                                       &gz_data, &gz_size);
             if (ret == -1) {
-                processing_gzipped_file = FLB_FALSE;
                 flb_plg_error(ctx->ins, "gzip uncompress is failed");
                 return FLB_TAIL_ERROR;
             }
 
             if (gz_size > ctx->buf_max_size) {
                 flb_free(gz_data);
-                processing_gzipped_file = FLB_FALSE;
-                flb_plg_error(ctx->ins, "gzip uncompressed contents is too huge. size = %lu", gz_size);
+                flb_plg_error(ctx->ins, "gzip uncompressed contents is too huge. size = %lu", file->compressed_len);
                 return FLB_TAIL_ERROR;
             }
-
-            /* Replace contents of buf_data with gz_data. */
-            flb_free(file->buf_data);
-            file->buf_len += gz_size;
-            file->buf_data = gz_data;
+            file->compressed_len += gz_size;
+            file->compressed_data = gz_data;
         }
         else {
             /* we read some data, let the content processor take care of it */
@@ -1417,17 +1440,20 @@ int flb_tail_file_chunk(struct flb_tail_file *file)
             return FLB_TAIL_ERROR;
         }
 
-        if (processing_gzipped_file == FLB_TRUE) {
+        if (file->compressed_len > 0) {
             /* Adjust the file offset with the original length of file */
             file->offset += bytes;
+            consume_bytes(file->compressed_data, processed_bytes, file->compressed_len);
+            file->compressed_len -= processed_bytes;
+            file->compressed_data[file->compressed_len] = '\0';
         }
         else {
             /* Adjust the file offset and buffer */
             file->offset += processed_bytes;
+            consume_bytes(file->buf_data, processed_bytes, file->buf_len);
+            file->buf_len -= processed_bytes;
+            file->buf_data[file->buf_len] = '\0';
         }
-        consume_bytes(file->buf_data, processed_bytes, file->buf_len);
-        file->buf_len -= processed_bytes;
-        file->buf_data[file->buf_len] = '\0';
 
 #ifdef FLB_HAVE_SQLDB
         if (file->config->db) {

@@ -87,6 +87,9 @@ struct flb_tail_file {
     size_t buf_size;
     char *buf_data;
 
+    size_t compressed_len;
+    char *compressed_data;
+
     /*
      * This value represent the number of bytes procesed by process_content()
      * in the last iteration.
