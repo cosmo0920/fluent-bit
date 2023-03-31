@@ -1486,7 +1486,7 @@ int flb_tail_file_chunk(struct flb_tail_file *file)
 
             if (gz_size > ctx->buf_max_size) {
                 flb_free(gz_data);
-                flb_plg_error(ctx->ins, "gzip uncompressed contents is too huge. size = %lu", file->compressed_len);
+                flb_plg_error(ctx->ins, "gzip uncompressed contents is too large. size = %lu", file->compressed_len);
                 return FLB_TAIL_ERROR;
             }
             file->compressed_len += gz_size;
