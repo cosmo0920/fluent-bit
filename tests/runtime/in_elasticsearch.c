@@ -114,15 +114,21 @@ struct in_elasticsearch_client_ctx* in_elasticsearch_client_ctx_create(int port)
         return NULL;
     }
 
-    evl = mk_event_loop_create(16);
-    if (!TEST_CHECK(evl != NULL)) {
-        TEST_MSG("mk_event_loop failed");
-        flb_free(ret_ctx);
-        return NULL;
+    evl = flb_engine_evl_get();
+    if (evl == NULL) {
+        evl = mk_event_loop_create(16);
+        if (!TEST_CHECK(evl != NULL)) {
+            TEST_MSG("mk_event_loop failed");
+            flb_free(ret_ctx);
+            return NULL;
+        }
+        ret_ctx->evl = evl;
+        flb_engine_evl_init();
+        flb_engine_evl_set(evl);
     }
-    ret_ctx->evl = evl;
-    flb_engine_evl_init();
-    flb_engine_evl_set(evl);
+    else {
+        flb_engine_evl_set(evl);
+    }
 
     ret_ctx->config = flb_config_init();
     if(!TEST_CHECK(ret_ctx->config != NULL)) {
@@ -249,6 +255,7 @@ void flb_test_in_elasticsearch_version()
     ret = flb_start(ctx->flb);
     TEST_CHECK(ret == 0);
 
+    flb_engine_evl_set(ctx->flb->config->evl);
     ctx->httpc = in_elasticsearch_client_ctx_create(port);
     TEST_CHECK(ctx->httpc != NULL);
 
@@ -325,6 +332,7 @@ void flb_test_in_elasticsearch(char *write_op, int port)
     ret = flb_start(ctx->flb);
     TEST_CHECK(ret == 0);
 
+    flb_engine_evl_set(ctx->flb->config->evl);
     ctx->httpc = in_elasticsearch_client_ctx_create(port);
     TEST_CHECK(ctx->httpc != NULL);
 
@@ -415,6 +423,7 @@ void flb_test_in_elasticsearch_invalid(char *write_op, int status, char *expecte
     ret = flb_start(ctx->flb);
     TEST_CHECK(ret == 0);
 
+    flb_engine_evl_set(ctx->flb->config->evl);
     ctx->httpc = in_elasticsearch_client_ctx_create(port);
     TEST_CHECK(ctx->httpc != NULL);
 
@@ -514,6 +523,7 @@ void flb_test_in_elasticsearch_multi_ops()
     ret = flb_start(ctx->flb);
     TEST_CHECK(ret == 0);
 
+    flb_engine_evl_set(ctx->flb->config->evl);
     ctx->httpc = in_elasticsearch_client_ctx_create(port);
     TEST_CHECK(ctx->httpc != NULL);
 
@@ -599,6 +609,7 @@ void flb_test_in_elasticsearch_multi_ops_gzip()
     ret = flb_start(ctx->flb);
     TEST_CHECK(ret == 0);
 
+    flb_engine_evl_set(ctx->flb->config->evl);
     ctx->httpc = in_elasticsearch_client_ctx_create(port);
     TEST_CHECK(ctx->httpc != NULL);
 
@@ -682,6 +693,7 @@ void flb_test_in_elasticsearch_node_info()
     ret = flb_start(ctx->flb);
     TEST_CHECK(ret == 0);
 
+    flb_engine_evl_set(ctx->flb->config->evl);
     ctx->httpc = in_elasticsearch_client_ctx_create(port);
     TEST_CHECK(ctx->httpc != NULL);
 
@@ -757,6 +769,7 @@ void flb_test_in_elasticsearch_tag_key()
     ret = flb_start(ctx->flb);
     TEST_CHECK(ret == 0);
 
+    flb_engine_evl_set(ctx->flb->config->evl);
     ctx->httpc = in_elasticsearch_client_ctx_create(port);
     TEST_CHECK(ctx->httpc != NULL);
 
