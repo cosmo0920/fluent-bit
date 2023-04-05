@@ -110,15 +110,21 @@ struct http_client_ctx* http_client_ctx_create()
         return NULL;
     }
 
-    evl = mk_event_loop_create(16);
-    if (!TEST_CHECK(evl != NULL)) {
-        TEST_MSG("mk_event_loop failed");
-        flb_free(ret_ctx);
-        return NULL;
+    evl = flb_engine_evl_get();
+    if (evl == NULL) {
+        evl = mk_event_loop_create(16);
+        if (!TEST_CHECK(evl != NULL)) {
+            TEST_MSG("mk_event_loop failed");
+            flb_free(ret_ctx);
+            return NULL;
+        }
+        ret_ctx->evl = evl;
+        flb_engine_evl_init();
+        flb_engine_evl_set(evl);
     }
-    ret_ctx->evl = evl;
-    flb_engine_evl_init();
-    flb_engine_evl_set(evl);
+    else {
+        flb_engine_evl_set(evl);
+    }
 
     ret_ctx->config = flb_config_init();
     if(!TEST_CHECK(ret_ctx->config != NULL)) {
@@ -242,6 +248,7 @@ void flb_test_http()
     ret = flb_start(ctx->flb);
     TEST_CHECK(ret == 0);
 
+    flb_engine_evl_set(ctx->flb->config->evl);
     ctx->httpc = http_client_ctx_create();
     TEST_CHECK(ctx->httpc != NULL);
 
@@ -315,6 +322,7 @@ void flb_test_http_successful_response_code(char *response_code)
     ret = flb_start(ctx->flb);
     TEST_CHECK(ret == 0);
 
+    flb_engine_evl_set(ctx->flb->config->evl);
     ctx->httpc = http_client_ctx_create();
     TEST_CHECK(ctx->httpc != NULL);
 
@@ -398,6 +406,7 @@ void flb_test_http_tag_key()
     ret = flb_start(ctx->flb);
     TEST_CHECK(ret == 0);
 
+    flb_engine_evl_set(ctx->flb->config->evl);
     ctx->httpc = http_client_ctx_create();
     TEST_CHECK(ctx->httpc != NULL);
 
