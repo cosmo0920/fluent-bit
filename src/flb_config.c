@@ -177,6 +177,11 @@ struct flb_service_config service_configs[] = {
      FLB_CONF_TYPE_BOOL,
      offsetof(struct flb_config, enable_hot_reload)},
 
+    {FLB_CONF_STR_GZIP_DECOMPRESS_LIMIT,
+     FLB_CONF_TYPE_STR,
+     offsetof(struct flb_config, gzip_decompress_limit)},
+
+
     {NULL, FLB_CONF_TYPE_OTHER, 0} /* end of array */
 };
 
@@ -289,6 +294,9 @@ struct flb_config *flb_config_init()
                  config->coro_stack_size, getpagesize());
         config->coro_stack_size = (unsigned int)getpagesize();
     }
+
+    /* Set the default gzip decompression size */
+    config->gzip_decompress_limit = flb_strdup(FLB_CONFIG_DEFAULT_GZIP_DECOMPRESS_UPPER_LIMIT);
 
     /* collectors */
     pthread_mutex_init(&config->collectors_mutex, NULL);
@@ -500,6 +508,10 @@ void flb_config_exit(struct flb_config *config)
 
     flb_slist_destroy(&config->stream_processor_tasks);
 #endif
+
+    if (config->gzip_decompress_limit) {
+        flb_free(config->gzip_decompress_limit);
+    }
 
     flb_slist_destroy(&config->external_plugins);
 

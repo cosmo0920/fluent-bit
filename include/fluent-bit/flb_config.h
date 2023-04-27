@@ -37,6 +37,7 @@
 #define HC_RETRY_FAILURE_COUNTS_DEFAULT 5
 #define HEALTH_CHECK_PERIOD 60
 #define FLB_CONFIG_DEFAULT_TAG  "fluent_bit"
+#define FLB_CONFIG_DEFAULT_GZIP_DECOMPRESS_UPPER_LIMIT "100MB"
 
 /* Main struct to hold the configuration of the runtime service */
 struct flb_config {
@@ -257,6 +258,7 @@ struct flb_config {
 #endif /* FLB_HAVE_CHUNK_TRACE */
 
     int enable_hot_reload;
+    char *gzip_decompress_limit;
 
     /* Co-routines */
     unsigned int coro_stack_size;
@@ -359,5 +361,8 @@ enum conf_type {
 /* Scheduler */
 #define FLB_CONF_STR_SCHED_CAP        "scheduler.cap"
 #define FLB_CONF_STR_SCHED_BASE       "scheduler.base"
+
+/* Gzip */
+#define FLB_CONF_STR_GZIP_DECOMPRESS_LIMIT  "Gzip_Decompress_Limit"
 
 #endif
