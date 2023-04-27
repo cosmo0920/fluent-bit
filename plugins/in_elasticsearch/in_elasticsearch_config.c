@@ -17,13 +17,14 @@
  *  limitations under the License.
  */
 
+#include <fluent-bit/flb_utils.h>
 #include <fluent-bit/flb_input_plugin.h>
 
 #include "in_elasticsearch.h"
 #include "in_elasticsearch_config.h"
 #include "in_elasticsearch_bulk_conn.h"
 
-struct flb_in_elasticsearch *in_elasticsearch_config_create(struct flb_input_instance *ins)
+struct flb_in_elasticsearch *in_elasticsearch_config_create(struct flb_input_instance *ins, struct flb_config *config)
 {
     int ret;
     char port[8];
@@ -54,6 +55,8 @@ struct flb_in_elasticsearch *in_elasticsearch_config_create(struct flb_input_ins
     /* HTTP Server specifics */
     ctx->server = flb_calloc(1, sizeof(struct mk_server));
     ctx->server->keep_alive = MK_TRUE;
+
+    ctx->gzip_decompress_limit = flb_utils_size_to_bytes(config->gzip_decompress_limit);
 
     /* monkey detects server->workers == 0 as the server not being initialized at the
      * moment so we want to make sure that it stays that way!
