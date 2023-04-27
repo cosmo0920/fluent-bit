@@ -1478,7 +1478,8 @@ int flb_tail_file_chunk(struct flb_tail_file *file)
             }
 
             ret = flb_gzip_uncompress((void *) file->buf_data, bytes,
-                                      &gz_data, &gz_size);
+                                      &gz_data, &gz_size,
+                                      flb_utils_size_to_bytes(ctx->config->gzip_decompress_limit));
             if (ret == -1) {
                 flb_plg_error(ctx->ins, "gzip uncompress is failed");
                 return FLB_TAIL_ERROR;
