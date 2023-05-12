@@ -109,12 +109,14 @@ static int in_syslog_init(struct flb_input_instance *in,
     }
     ctx->collector_id = -1;
 
+#if !defined(FLB_SYSTEM_WINDOWS)
     if ((ctx->mode == FLB_SYSLOG_UNIX_TCP || ctx->mode == FLB_SYSLOG_UNIX_UDP)
         && !ctx->unix_path) {
         flb_plg_error(ctx->ins, "Unix path not defined");
         syslog_conf_destroy(ctx);
         return -1;
     }
+#endif
 
     /* Create Unix Socket */
     ret = syslog_server_create(ctx);
@@ -153,8 +155,12 @@ static int in_syslog_init(struct flb_input_instance *in,
     flb_input_set_context(in, ctx);
 
     /* Collect events for every opened connection to our socket */
+#if !defined(FLB_SYSTEM_WINDOWS)
     if (ctx->mode == FLB_SYSLOG_UNIX_TCP ||
         ctx->mode == FLB_SYSLOG_TCP) {
+#else
+    if (ctx->mode == FLB_SYSLOG_TCP) {
+#endif
         ret = flb_input_set_collector_socket(in,
                                              in_syslog_collect_tcp,
                                              ctx->downstream->server_fd,

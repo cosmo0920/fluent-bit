@@ -26,11 +26,13 @@
 #include <fluent-bit/flb_downstream.h>
 #include <fluent-bit/flb_input_plugin.h>
 
+#if !defined(FLB_SYSTEM_WINDOWS)
 #include <unistd.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#endif
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "syslog.h"
 
@@ -64,6 +66,7 @@ static int remove_existing_socket_file(char *socket_path)
     return 0;
 }
 
+#if !defined(FLB_SYSTEM_WINDOWS)
 static int syslog_server_unix_create(struct flb_syslog *ctx)
 {
     int             result;
@@ -123,6 +126,7 @@ static int syslog_server_unix_create(struct flb_syslog *ctx)
 
     return 0;
 }
+#endif
 
 static int syslog_server_net_create(struct flb_syslog *ctx)
 {
@@ -189,7 +193,11 @@ int syslog_server_create(struct flb_syslog *ctx)
     }
     else {
         /* Create unix socket end-point */
+#if !defined(FLB_SYSTEM_WINDOWS)
         ret = syslog_server_unix_create(ctx);
+#else
+        ret = -1;
+#endif
     }
 
     if (ret != 0) {
@@ -213,12 +221,16 @@ int syslog_server_destroy(struct flb_syslog *ctx)
         ctx->downstream = NULL;
     }
 
+#if !defined(FLB_SYSTEM_WINDOWS)
     if (ctx->mode == FLB_SYSLOG_UNIX_TCP || ctx->mode == FLB_SYSLOG_UNIX_UDP) {
         if (ctx->unix_path) {
             unlink(ctx->unix_path);
         }
     }
     else {
+#else
+    {
+#endif
         flb_free(ctx->port);
     }
 

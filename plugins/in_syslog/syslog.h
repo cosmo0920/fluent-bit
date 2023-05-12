@@ -47,9 +47,11 @@ struct flb_syslog {
 
     /* Unix socket (UDP/TCP)*/
     int server_fd;
+#if !defined(FLB_SYSTEM_WINDOWS)
     flb_sds_t unix_path;
     flb_sds_t unix_perm_str;
     unsigned int unix_perm;
+#endif
     size_t receive_buffer_size;
 
     /* UDP buffer, data length and buffer size */

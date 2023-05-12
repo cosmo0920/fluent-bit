@@ -70,6 +70,7 @@ struct flb_syslog *syslog_conf_create(struct flb_input_instance *ins,
 
     /* Syslog mode: unix_udp, unix_tcp, tcp or udp */
     if (ctx->mode_str) {
+#if !defined(FLB_SYSTEM_WINDOWS)
         if (strcasecmp(ctx->mode_str, "unix_tcp") == 0) {
             ctx->mode = FLB_SYSLOG_UNIX_TCP;
         }
@@ -77,6 +78,9 @@ struct flb_syslog *syslog_conf_create(struct flb_input_instance *ins,
             ctx->mode = FLB_SYSLOG_UNIX_UDP;
         }
         else if (strcasecmp(ctx->mode_str, "tcp") == 0) {
+#else
+        if (strcasecmp(ctx->mode_str, "tcp") == 0) {
+#endif
             ctx->mode = FLB_SYSLOG_TCP;
         }
         else if (strcasecmp(ctx->mode_str, "udp") == 0) {
@@ -91,7 +95,11 @@ struct flb_syslog *syslog_conf_create(struct flb_input_instance *ins,
         }
     }
     else {
+#if !defined(FLB_SYSTEM_WINDOWS)
         ctx->mode = FLB_SYSLOG_UNIX_UDP;
+#else
+        ctx->mode = FLB_SYSLOG_UDP;
+#endif
     }
 
     /* Check if TCP mode was requested */
@@ -103,6 +111,7 @@ struct flb_syslog *syslog_conf_create(struct flb_input_instance *ins,
         ctx->port = flb_strdup(port);
     }
 
+#if !defined(FLB_SYSTEM_WINDOWS)
     /* Unix socket path and permission */
     if (ctx->mode == FLB_SYSLOG_UNIX_UDP || ctx->mode == FLB_SYSLOG_UNIX_TCP) {
         if (ctx->unix_perm_str) {
@@ -111,6 +120,7 @@ struct flb_syslog *syslog_conf_create(struct flb_input_instance *ins,
             ctx->unix_perm = 0644;
         }
     }
+#endif
 
     /* Buffer Chunk Size */
     if (ctx->buffer_chunk_size == -1) {
