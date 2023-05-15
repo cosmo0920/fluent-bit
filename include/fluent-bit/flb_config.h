@@ -289,6 +289,7 @@ void flb_config_exit(struct flb_config *config);
 const char *flb_config_prop_get(const char *key, struct mk_list *list);
 int flb_config_set_property(struct flb_config *config,
                             const char *k, const char *v);
+int flb_config_evl_init(struct flb_config *config);
 int flb_config_set_program_name(struct flb_config *config, char *name);
 int flb_config_load_config_format(struct flb_config *config, struct flb_cf *cf);
 

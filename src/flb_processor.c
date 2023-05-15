@@ -615,6 +615,13 @@ int flb_processors_load_from_config_format_group(struct flb_processor *proc, str
         }
     }
 
+    /* Initialize event loop */
+    ret = flb_config_evl_init(proc->config);
+    if (ret < 0) {
+        flb_error("[processor] failed to create event_loop");
+        return -1;
+    }
+
     /* initialize processors */
     ret = flb_processor_init(proc);
     if (ret == -1) {

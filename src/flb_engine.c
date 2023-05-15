@@ -626,13 +626,13 @@ int flb_engine_start(struct flb_config *config)
 
     flb_pack_init(config);
 
-    /* Create the event loop and set it in the global configuration */
-    evl = mk_event_loop_create(256);
-    if (!evl) {
+    /* Create the event loop in the global configuration */
+    ret = flb_config_evl_init(config);
+    if (ret < 0) {
         fprintf(stderr, "[log] could not create event loop\n");
         return -1;
     }
-    config->evl = evl;
+    evl = config->evl;
 
     /* Create the bucket queue (FLB_ENGINE_PRIORITY_COUNT priorities) */
     evl_bktq = flb_bucket_queue_create(FLB_ENGINE_PRIORITY_COUNT);

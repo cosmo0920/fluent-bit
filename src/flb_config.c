@@ -680,6 +680,25 @@ int flb_config_set_property(struct flb_config *config,
     return 0;
 }
 
+int flb_config_evl_init(struct flb_config *config)
+{
+    struct mk_event_loop *evl = NULL;
+
+    /* Already initialized */
+    if (config->evl) {
+        return 0;
+    }
+
+    /* Create the event loop and set it in the global configuration */
+    evl = mk_event_loop_create(256);
+    if (!evl) {
+        return -1;
+    }
+    config->evl = evl;
+
+    return 0;
+}
+
 int flb_config_set_program_name(struct flb_config *config, char *name)
 {
     config->program_name = flb_sds_create(name);
