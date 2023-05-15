@@ -26,6 +26,7 @@
 #include <fluent-bit/flb_processor_plugin.h>
 #include <fluent-bit/flb_filter.h>
 #include <fluent-bit/flb_kv.h>
+#include <fluent-bit/flb_storage.h>
 #include <fluent-bit/flb_log_event_decoder.h>
 #include <fluent-bit/flb_log_event_encoder.h>
 
@@ -619,6 +620,13 @@ int flb_processors_load_from_config_format_group(struct flb_processor *proc, str
     ret = flb_config_evl_init(proc->config);
     if (ret < 0) {
         flb_error("[processor] failed to create event_loop");
+        return -1;
+    }
+
+    /* Initialize storage context */
+    ret = flb_storage_create(proc->config);
+    if (ret < 0) {
+        flb_error("[processor] failed to storage context");
         return -1;
     }
 

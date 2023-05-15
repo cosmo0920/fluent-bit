@@ -599,6 +599,11 @@ int flb_storage_create(struct flb_config *ctx)
     struct cio_ctx *cio;
     struct cio_options opts = {0};
 
+    /* Already initialized */
+    if (ctx->cio != NULL) {
+        return 0;
+    }
+
     /* always use read/write mode */
     flags = CIO_OPEN;
 
