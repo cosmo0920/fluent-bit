@@ -1396,3 +1396,12 @@ int flb_utils_get_machine_id(char **out_id, size_t *out_size)
 
     return -1;
 }
+
+void flb_utils_str_property_check_dup(const char* key_name, char *prop, const char *new_prop)
+{
+    if (prop != NULL) {
+        flb_warn("[utils] property '%s' is already specified with '%s'. Overwriting with '%s'",
+                 key_name, prop, new_prop);
+        flb_sds_destroy(prop);
+    }
+}
