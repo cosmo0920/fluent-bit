@@ -760,6 +760,7 @@ int flb_output_set_property(struct flb_output_instance *ins,
 
     /* Check if the key is a known/shared property */
     if (prop_key_check("match", k, len) == 0) {
+        flb_utils_str_property_check_dup("match", ins->match, tmp);
         ins->match = tmp;
     }
 #ifdef FLB_HAVE_REGEX
@@ -769,6 +770,7 @@ int flb_output_set_property(struct flb_output_instance *ins,
     }
 #endif
     else if (prop_key_check("alias", k, len) == 0 && tmp) {
+        flb_utils_str_property_check_dup("alias", ins->alias, tmp);
         ins->alias = tmp;
     }
     else if (prop_key_check("log_level", k, len) == 0 && tmp) {
@@ -788,6 +790,7 @@ int flb_output_set_property(struct flb_output_instance *ins,
         ins->log_suppress_interval = ret;
     }
     else if (prop_key_check("host", k, len) == 0) {
+        flb_utils_str_property_check_dup("host", ins->host.name, tmp);
         ins->host.name = tmp;
     }
     else if (prop_key_check("port", k, len) == 0) {
@@ -888,12 +891,15 @@ int flb_output_set_property(struct flb_output_instance *ins,
         flb_sds_destroy(tmp);
     }
     else if (prop_key_check("tls.vhost", k, len) == 0) {
+        flb_utils_str_property_check_dup("tls.vhost", ins->tls_vhost, tmp);
         ins->tls_vhost = tmp;
     }
     else if (prop_key_check("tls.ca_path", k, len) == 0) {
+        flb_utils_str_property_check_dup("tls.ca_path", ins->tls_ca_path, tmp);
         ins->tls_ca_path = tmp;
     }
     else if (prop_key_check("tls.ca_file", k, len) == 0) {
+        flb_utils_str_property_check_dup("tls.ca_file", ins->tls_ca_file, tmp);
         ins->tls_ca_file = tmp;
     }
     else if (prop_key_check("tls.crt_file", k, len) == 0) {
@@ -903,6 +909,7 @@ int flb_output_set_property(struct flb_output_instance *ins,
         ins->tls_key_file = tmp;
     }
     else if (prop_key_check("tls.key_passwd", k, len) == 0) {
+        flb_utils_str_property_check_dup("tls.key_passwd", ins->tls_key_passwd, tmp);
         ins->tls_key_passwd = tmp;
     }
 #endif
