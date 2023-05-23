@@ -296,9 +296,11 @@ int flb_filter_set_property(struct flb_filter_instance *ins,
     else
 #endif
     if (prop_key_check("match", k, len) == 0) {
+        flb_utils_str_property_check_dup("match", ins->match, tmp);
         ins->match = tmp;
     }
     else if (prop_key_check("alias", k, len) == 0 && tmp) {
+        flb_utils_str_property_check_dup("alias", ins->alias, tmp);
         ins->alias = tmp;
     }
     else if (prop_key_check("log_level", k, len) == 0 && tmp) {
