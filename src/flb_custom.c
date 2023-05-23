@@ -26,6 +26,7 @@
 #include <fluent-bit/flb_kv.h>
 #include <fluent-bit/flb_pack.h>
 #include <fluent-bit/flb_metrics.h>
+#include <fluent-bit/flb_utils.h>
 #include <chunkio/chunkio.h>
 
 static inline int instance_id(struct flb_config *config)
@@ -68,6 +69,7 @@ int flb_custom_set_property(struct flb_custom_instance *ins,
     }
 
     if (prop_key_check("alias", k, len) == 0 && tmp) {
+        flb_utils_str_property_check_dup("alias", ins->alias, tmp);
         ins->alias = tmp;
     }
     else if (prop_key_check("log_level", k, len) == 0 && tmp) {
