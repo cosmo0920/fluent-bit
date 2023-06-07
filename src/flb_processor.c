@@ -198,6 +198,10 @@ struct flb_processor_unit *flb_processor_unit_create(struct flb_processor *proc,
 
             return NULL;
         }
+        /* Ensure the uniqueness of plugin name for filter with
+         * sequence number for processor stack. */
+        snprintf(f_ins->name, sizeof(f_ins->name) - 1,
+                 "%s.proc.%i", unit_name, proc->seq_id);
 
         f_ins->parent_processor = (void *) pu;
 

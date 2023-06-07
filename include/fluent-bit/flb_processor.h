@@ -119,6 +119,9 @@ struct flb_processor {
     void *data;
     int source_plugin_type;
 
+    /* processor sequencially incremented id */
+    int seq_id;
+
     /* Fluent Bit context */
     struct flb_config *config;
 };

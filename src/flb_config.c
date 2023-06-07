@@ -713,6 +713,7 @@ static int configure_plugins_type(struct flb_config *config, struct flb_cf *cf, 
     struct flb_cf_group *processors = NULL;
     int i;
     void *ins;
+    int seq_id = 0;
 
     if (type == FLB_CF_CUSTOM) {
         s_type = "custom";
@@ -833,15 +834,18 @@ static int configure_plugins_type(struct flb_config *config, struct flb_cf *cf, 
         processors = flb_cf_group_get(cf, s, "processors");
         if (processors) {
             if (type == FLB_CF_INPUT) {
+                ((struct flb_input_instance *) ins)->processor->seq_id = seq_id;
                 flb_processors_load_from_config_format_group(((struct flb_input_instance *) ins)->processor, processors);
             }
             else if (type == FLB_CF_OUTPUT) {
+                ((struct flb_output_instance *) ins)->processor->seq_id = seq_id;
                 flb_processors_load_from_config_format_group(((struct flb_output_instance *) ins)->processor, processors);
             }
             else {
                 flb_error("[config] section '%s' does not support processors", s_type);
             }
         }
+        seq_id++;
     }
 
     return 0;
