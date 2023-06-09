@@ -18,6 +18,7 @@
  */
 
 #include <fluent-bit/flb_info.h>
+#include <fluent-bit/flb_log.h>
 #include <fluent-bit/flb_sds.h>
 #include <fluent-bit/flb_input_plugin.h>
 #include <cfl/cfl_list.h>
@@ -262,6 +263,13 @@ static int filesystem_update(struct flb_ne *ctx,
                                       mount_point_info.f_bsize *
                                       mount_point_info.f_blocks,
                                       3, labels);
+                    }
+                    else {
+                        if (errno != EPERM && errno != EACCES) {
+                            flb_errno();
+                            flb_plg_warn(ctx->ins, "retrive filesystem (device: %s, path: %s, fs type: %s) metrics is failed",
+                                         field_values[0], field_values[1], field_values[2]);
+                        }
                     }
                 }
             }
