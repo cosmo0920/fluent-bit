@@ -23,6 +23,48 @@
 
 #include <sys/stat.h>
 
+#include <signal.h>
+#include <fluent-bit/flb_stacktrace.h>
+
+#ifdef FLB_HAVE_LIBBACKTRACE
+struct flb_stacktrace flb_st;
+#endif
+
+static inline void test_signal_init(void);
+
+static inline void test_signal_handler(int signal)
+{
+    test_signal_init();
+
+    switch(signal) {
+    case SIGSEGV:
+    case SIGABRT:
+    case SIGFPE:
+#ifdef FLB_HAVE_LIBBACKTRACE
+        /* To preserve stacktrace */
+        flb_stacktrace_print(&flb_st);
+#endif
+        abort();
+    }
+}
+
+static inline void test_signal_init(void)
+{
+    signal(SIGSEGV, &test_signal_handler);
+    signal(SIGFPE,  &test_signal_handler);
+    signal(SIGABRT, &test_signal_handler);
+}
+
+static inline void test_signal_setup(void)
+{
+    test_signal_init();
+#ifdef FLB_HAVE_LIBBACKTRACE
+    flb_stacktrace_init("runtime-test", &flb_st);
+#endif
+}
+
+#define TEST_INIT { test_signal_setup(); }
+
 #include "../lib/acutest/acutest.h"
 #define FLB_TESTS_DATA_PATH "@FLB_TESTS_DATA_PATH@"
 

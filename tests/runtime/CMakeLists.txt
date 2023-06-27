@@ -160,6 +160,9 @@ foreach(source_file ${CHECK_PROGRAMS})
       if(FLB_AVRO_ENCODER)
         target_link_libraries(${source_file_we} avro-static jansson)
       endif()
+      if(FLB_BACKTRACE)
+	target_link_libraries(${source_file_we} libbacktrace)
+      endif()
     add_test(NAME ${source_file_we}
             COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${source_file_we}
             WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}/build)
