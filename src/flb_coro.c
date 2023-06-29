@@ -22,6 +22,7 @@
 #include <fluent-bit/flb_coro.h>
 
 FLB_TLS_DEFINE(struct flb_coro, flb_coro_key);
+static pthread_once_t local_coro_thread_init = PTHREAD_ONCE_INIT;
 
 static pthread_mutex_t coro_mutex_init;
 
@@ -31,7 +32,7 @@ void flb_coro_init()
     pthread_mutex_init(&coro_mutex_init, NULL);
 }
 
-void flb_coro_thread_init()
+static void flb_coro_thread_init_private()
 {
     size_t s;
     cothread_t th;
@@ -40,6 +41,11 @@ void flb_coro_thread_init()
     th = co_create(256, NULL, &s);
     co_delete(th);
     pthread_mutex_unlock(&coro_mutex_init);
+}
+
+void flb_coro_thread_init()
+{
+    pthread_once(&local_coro_thread_init, flb_coro_thread_init_private);
 }
 
 struct flb_coro *flb_coro_get()
