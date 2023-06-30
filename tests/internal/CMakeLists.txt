@@ -39,6 +39,7 @@ set(UNIT_TESTS_FILES
   env.c
   log.c
   processor.c
+  coro.c
   )
 
 # Config format
