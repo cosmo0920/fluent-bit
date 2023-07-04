@@ -418,8 +418,13 @@ void flb_input_coro_prepare_destroy(struct flb_input_coro *input_coro)
     struct flb_input_instance *ins = input_coro->ins;
 
     /* move flb_input_coro from 'input_coro_list' to 'input_coro_list_destroy' */
+#ifdef FKB_SYSTEM_MACOS
+    mk_list_add(&input_coro->_head, &ins->input_coro_list_destroy);
+    mk_list_del(&input_coro->_head);
+#else
     mk_list_del(&input_coro->_head);
     mk_list_add(&input_coro->_head, &ins->input_coro_list_destroy);
+#endif
 }
 
 int flb_input_name_exists(const char *name, struct flb_config *config)
