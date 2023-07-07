@@ -124,8 +124,11 @@ static inline int pack_line(struct flb_syslog *ctx,
                                                raw_data_size,
                                                MSGPACK_OBJECT_BIN);
 
-        if (result != 0) {
-            flb_plg_debug(ctx->ins, "error appending raw message : %d", result);
+        if (result == FLB_MAP_NOT_MODIFIED) {
+            flb_plg_debug(ctx->ins, "error modifying raw message : %d", result);
+        }
+        else if (result == FLB_MAP_EXPANSION_ERROR) {
+            flb_plg_debug(ctx->ins, "error expanding raw message : %d", result);
         }
     }
 
@@ -153,8 +156,11 @@ static inline int pack_line(struct flb_syslog *ctx,
                                                        MSGPACK_OBJECT_STR);
             }
 
-            if (result != 0) {
-                flb_plg_debug(ctx->ins, "error appending source_address : %d", result);
+            if (result == FLB_MAP_NOT_MODIFIED) {
+                flb_plg_debug(ctx->ins, "error modifying source_address : %d", result);
+            }
+            else if (result == FLB_MAP_EXPANSION_ERROR) {
+                flb_plg_debug(ctx->ins, "error expanding source_address : %d", result);
             }
         }
     }
