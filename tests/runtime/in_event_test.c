@@ -12,6 +12,10 @@ void flb_test_input_event()
 
     ctx = flb_create();
 
+    flb_service_set(ctx,
+                    "Log_Level", "trace",
+                    NULL);
+
     in_ffd = flb_input(ctx, (char *) "event_test", NULL);
     TEST_CHECK(in_ffd >= 0);
 

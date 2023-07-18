@@ -199,6 +199,10 @@ static int cb_collector_server_client(struct flb_input_instance *ins,
 {
     struct flb_connection *u_conn;
     struct event_test *ctx = (struct event_test *) in_context;
+    struct flb_coro *coro;
+
+    coro = flb_coro_get();
+    flb_plg_error(ins, "[coro] coro = %p", coro);
 
     /* get the upstream connection (localhost) */
     u_conn = flb_upstream_conn_get(ctx->upstream);

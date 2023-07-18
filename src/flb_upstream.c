@@ -542,6 +542,7 @@ static struct flb_connection *create_conn(struct flb_upstream *u)
     struct flb_upstream_queue *uq;
 
     coro = flb_coro_get();
+    flb_error("[upstream] coro = %p", coro);
 
     conn = flb_connection_create(FLB_INVALID_SOCKET,
                                  FLB_UPSTREAM_CONNECTION,
@@ -551,6 +552,7 @@ static struct flb_connection *create_conn(struct flb_upstream *u)
     if (conn == NULL) {
         return NULL;
     }
+    flb_error("[upstream] conn = %p", conn);
 
     conn->busy_flag = FLB_TRUE;
 
@@ -566,6 +568,7 @@ static struct flb_connection *create_conn(struct flb_upstream *u)
     /* Link new connection to the busy queue */
     uq = flb_upstream_queue_get(u);
     mk_list_add(&conn->_head, &uq->busy_queue);
+    flb_error("[upstream] u = %p", u);
 
     flb_upstream_increment_total_connections_count(u);
 
@@ -575,6 +578,7 @@ static struct flb_connection *create_conn(struct flb_upstream *u)
 
     /* Start connection */
     ret = flb_io_net_connect(conn, coro);
+    flb_error("[upstream] ret = %d", ret);
     if (ret == -1) {
         flb_connection_unset_connection_timeout(conn);
 

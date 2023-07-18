@@ -117,6 +117,7 @@ int flb_io_net_connect(struct flb_connection *connection,
         connection->fd = -1;
         connection->event.fd = -1;
     }
+    flb_error("[io] connection->fd = %d", connection->fd);
 
     /* Check which connection mode must be done */
     if (coro) {
@@ -125,6 +126,8 @@ int flb_io_net_connect(struct flb_connection *connection,
     else {
         async = FLB_FALSE;
     }
+    flb_error("[io] async = %d", async);
+    flb_error("[io] connection->upstream->tcp_port = %d", connection->upstream->tcp_port);
 
     /* Perform TCP connection */
     fd = flb_net_tcp_connect(connection->upstream->tcp_host,
@@ -132,6 +135,7 @@ int flb_io_net_connect(struct flb_connection *connection,
                              connection->stream->net.source_address,
                              connection->stream->net.connect_timeout,
                              async, coro, connection);
+    flb_error("[io] fd = flb_net_tcp_connect (%d)", fd);
     if (fd == -1) {
         return -1;
     }

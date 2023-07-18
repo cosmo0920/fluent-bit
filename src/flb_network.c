@@ -741,6 +741,7 @@ static void flb_net_getaddrinfo_callback(void *arg, int status, int timeouts,
 
     lookup_context = (struct flb_dns_lookup_context *) arg;
 
+    flb_error("[io][ares] lookup_context = %p", lookup_context);
     if (lookup_context->finished ||
         lookup_context->dropped) {
         return;
@@ -946,6 +947,7 @@ static struct flb_dns_lookup_context *flb_net_dns_lookup_context_create(
      * failures
     */
     lookup_context = flb_calloc(1, sizeof(struct flb_dns_lookup_context));
+    flb_error("[network][lookup_context] lookup_context = %p", lookup_context);
 
     if (!lookup_context) {
         flb_errno();
@@ -965,15 +967,21 @@ static struct flb_dns_lookup_context *flb_net_dns_lookup_context_create(
     if (dns_mode == FLB_DNS_USE_TCP) {
         opts.flags = ARES_FLAG_USEVC;
     }
+    flb_error("[network][lookup_context] optmask = %p", optmask);
+    flb_error("[network][lookup_context] lookup_context->ares_channel = %p",
+              lookup_context->ares_channel);
 
     *result = ares_init_options((ares_channel *) &lookup_context->ares_channel,
                                 &opts, optmask);
 
+    flb_error("[network][lookup_context] *result is? (%d)", *result);
     if (*result != ARES_SUCCESS) {
+        flb_error("[network][lookup_context] *result is? (%d)", *result);
         flb_free(lookup_context);
 
         return NULL;
     }
+    flb_error("[network][lookup_context] *result is success?: %d", *result == ARES_SUCCESS);
 
     lookup_context->ares_socket_functions.asocket = flb_dns_ares_socket;
     lookup_context->ares_socket_functions.aclose = flb_dns_ares_close;
@@ -1025,12 +1033,15 @@ int flb_net_getaddrinfo(const char *node, const char *service, struct addrinfo *
 
     event_loop = flb_engine_evl_get();
     assert(event_loop != NULL);
+    flb_error("[network] event_loop = %p", event_loop);
 
     coroutine = flb_coro_get();
     assert(coroutine != NULL);
+    flb_error("[network] corutine = %p", coroutine);
 
     dns_ctx = flb_net_dns_ctx_get();
     assert(dns_ctx != NULL);
+    flb_error("[network] dns_ctx = %p", dns_ctx);
 
     lookup_context = flb_net_dns_lookup_context_create(dns_ctx, event_loop, coroutine,
                                                        dns_mode, &result);
@@ -1039,6 +1050,7 @@ int flb_net_getaddrinfo(const char *node, const char *service, struct addrinfo *
         errno = errno_backup;
         return result;
     }
+    flb_error("[network] lookup_context = %p", lookup_context);
 
     lookup_context->udp_timeout_detected = &udp_timeout_detected;
     lookup_context->result_code = &result_code;
@@ -1205,6 +1217,7 @@ flb_sockfd_t flb_net_tcp_connect(const char *host, unsigned long port,
         flb_error("[net] invalid async mode with not set upstream connection");
         return -1;
     }
+    flb_error("[network] is_async = %d", is_async);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -1212,9 +1225,11 @@ flb_sockfd_t flb_net_tcp_connect(const char *host, unsigned long port,
 
     /* Set hints */
     set_ip_family(host, &hints);
+    flb_error("[network] host = %s", host);
 
-    /* fomart the TCP port */
+    /* /\* fomart the TCP port *\/ */
     snprintf(_port, sizeof(_port), "%lu", port);
+    flb_error("[network] _port = %s", _port);
 
     use_async_dns = is_async;
 
@@ -1225,6 +1240,7 @@ flb_sockfd_t flb_net_tcp_connect(const char *host, unsigned long port,
             use_async_dns = FLB_FALSE;
         }
     }
+    flb_error("[network] use_async_dns = %d", use_async_dns);
 
     /* retrieve DNS info */
     if (use_async_dns) {
@@ -1235,6 +1251,7 @@ flb_sockfd_t flb_net_tcp_connect(const char *host, unsigned long port,
     else {
         ret = getaddrinfo(host, _port, &hints, &res);
     }
+    flb_error("[network] ret = getaddrinfo (%d)", ret);
 
     if (ret) {
         if (use_async_dns) {
