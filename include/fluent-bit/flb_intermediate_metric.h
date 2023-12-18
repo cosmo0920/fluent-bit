@@ -33,6 +33,7 @@
 /* Metric Unit */
 #define PERCENT "Percent"
 #define BYTES "Bytes"
+#define COUNT "Count"
 
 struct flb_intermediate_metric
 {
@@ -40,6 +41,7 @@ struct flb_intermediate_metric
     msgpack_object value;
     int metric_type;
     const char *metric_unit;
+    int metric_resolution;
     struct flb_time timestamp;
 
     struct mk_list _head;

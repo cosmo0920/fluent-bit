@@ -672,6 +672,7 @@ int pack_emf_payload(struct flb_cloudwatch *ctx,
     struct mk_list *metric_head;
     struct flb_intermediate_metric *an_item;
     msgpack_unpack_return mp_ret;
+    int fluentbit_metric_entries;
 
     /* Serialize values into the buffer using msgpack_sbuffer_write */
     msgpack_packer mp_pck;
@@ -742,6 +743,10 @@ int pack_emf_payload(struct flb_cloudwatch *ctx,
     else if (strcmp(input_plugin, "mem") == 0) {
         msgpack_pack_array(&mp_pck, 6);
     }
+    else if (strcmp(input_plugin, "fluentbit_metrics") == 0) {
+        fluentbit_metric_entries = mk_list_size(flb_intermediate_metrics);
+        msgpack_pack_array(&mp_pck, fluentbit_metric_entries);
+    }
     else {
         msgpack_pack_array(&mp_pck, 0);
     }
@@ -749,15 +754,25 @@ int pack_emf_payload(struct flb_cloudwatch *ctx,
     mk_list_foreach_safe(metric_head, metric_temp, flb_intermediate_metrics) {
         an_item = mk_list_entry(metric_head, struct flb_intermediate_metric, _head);
         if (should_add_to_emf(an_item) == 1) {
-            msgpack_pack_map(&mp_pck, 2);
+            if (an_item->metric_resolution > 0) {
+                msgpack_pack_map(&mp_pck, 3);
+            }
+            else {
+                msgpack_pack_map(&mp_pck, 2);
+            }
             msgpack_pack_str(&mp_pck, 4);
             msgpack_pack_str_body(&mp_pck, "Name", 4);
             msgpack_pack_object(&mp_pck, an_item->key);
             msgpack_pack_str(&mp_pck, 4);
             msgpack_pack_str_body(&mp_pck, "Unit", 4);
             msgpack_pack_str(&mp_pck, strlen(an_item->metric_unit));
-            msgpack_pack_str_body(&mp_pck, an_item->metric_unit, 
+            msgpack_pack_str_body(&mp_pck, an_item->metric_unit,
                                   strlen(an_item->metric_unit));
+            if (an_item->metric_resolution > 0) {
+                msgpack_pack_str(&mp_pck, 17);
+                msgpack_pack_str_body(&mp_pck, "StorageResolution", 17);
+                msgpack_pack_int32(&mp_pck, an_item->metric_resolution);
+            }
         }
     }
 
@@ -787,12 +802,13 @@ int pack_emf_payload(struct flb_cloudwatch *ctx,
  * Main routine- processes msgpack and sends in batches which ignore the empty ones
  * return value is the number of events processed and send.
  */
-int process_and_send(struct flb_cloudwatch *ctx, const char *input_plugin, 
+int process_and_send(struct flb_cloudwatch *ctx, const char *input_plugin,
                      struct cw_flush *buf, flb_sds_t tag,
-                     const char *data, size_t bytes)
+                     const char *data, size_t bytes, int event_type)
 {
     int i = 0;
     size_t map_size;
+    size_t off = 0;
     msgpack_object  map;
     msgpack_object_kv *kv;
     msgpack_object  key;
@@ -819,8 +835,10 @@ int process_and_send(struct flb_cloudwatch *ctx, const char *input_plugin,
 
     int intermediate_metric_type;
     char *intermediate_metric_unit;
+    int intermediate_metric_resolution;
     struct flb_log_event_decoder log_decoder;
     struct flb_log_event log_event;
+    struct cmt *cmt;
 
     ret = flb_log_event_decoder_init(&log_decoder, (char *) data, bytes);
 
@@ -834,83 +852,177 @@ int process_and_send(struct flb_cloudwatch *ctx, const char *input_plugin,
     if (strncmp(input_plugin, "cpu", 3) == 0) {
         intermediate_metric_type = GAUGE;
         intermediate_metric_unit = PERCENT;
-    } 
+        intermediate_metric_resolution = 0;
+    }
     else if (strncmp(input_plugin, "mem", 3) == 0) {
         intermediate_metric_type = GAUGE;
         intermediate_metric_unit = BYTES;
+        intermediate_metric_resolution = 0;
+    }
+    else if (strncmp(input_plugin, "fluentbit_metrics", 17) == 0) {
+        intermediate_metric_type = COUNTER;
+        intermediate_metric_unit = COUNT;
+        intermediate_metric_resolution = 1;
     }
 
-    /* unpack msgpack */
-    while ((ret = flb_log_event_decoder_next(
-                    &log_decoder,
-                    &log_event)) == FLB_EVENT_DECODER_SUCCESS) {
+    if (event_type == FLB_EVENT_TYPE_LOGS) {
+        /* unpack msgpack */
+        while ((ret = flb_log_event_decoder_next(
+                        &log_decoder,
+                        &log_event)) == FLB_EVENT_DECODER_SUCCESS) {
 
-        /* Get the record/map */
-        map = *log_event.body;
-        map_size = map.via.map.size;
+            /* Get the record/map */
+            map = *log_event.body;
+            map_size = map.via.map.size;
 
-        stream = get_log_stream(ctx, tag, map);
-        if (!stream) {
-            flb_plg_debug(ctx->ins, "Couldn't determine log group & stream for record with tag %s", tag);
-            goto error;
-        }
+            stream = get_log_stream(ctx, tag, map);
+            if (!stream) {
+                flb_plg_debug(ctx->ins, "Couldn't determine log group & stream for record with tag %s", tag);
+                goto error;
+            }
 
-        if (ctx->log_key) {
-            key_str = NULL;
-            key_str_size = 0;
-            check = FLB_FALSE;
-            found = FLB_FALSE;
+            if (ctx->log_key) {
+                key_str = NULL;
+                key_str_size = 0;
+                check = FLB_FALSE;
+                found = FLB_FALSE;
 
-            kv = map.via.map.ptr;
+                kv = map.via.map.ptr;
 
-            for(j=0; j < map_size; j++) {
-                key = (kv+j)->key;
-                if (key.type == MSGPACK_OBJECT_BIN) {
-                    key_str  = (char *) key.via.bin.ptr;
-                    key_str_size = key.via.bin.size;
-                    check = FLB_TRUE;
-                }
-                if (key.type == MSGPACK_OBJECT_STR) {
-                    key_str  = (char *) key.via.str.ptr;
-                    key_str_size = key.via.str.size;
-                    check = FLB_TRUE;
-                }
+                for(j=0; j < map_size; j++) {
+                    key = (kv+j)->key;
+                    if (key.type == MSGPACK_OBJECT_BIN) {
+                        key_str  = (char *) key.via.bin.ptr;
+                        key_str_size = key.via.bin.size;
+                        check = FLB_TRUE;
+                    }
+                    if (key.type == MSGPACK_OBJECT_STR) {
+                        key_str  = (char *) key.via.str.ptr;
+                        key_str_size = key.via.str.size;
+                        check = FLB_TRUE;
+                    }
 
-                if (check == FLB_TRUE) {
-                    if (strncmp(ctx->log_key, key_str, key_str_size) == 0) {
-                        found = FLB_TRUE;
-                        val = (kv+j)->val;
-                        ret = add_event(ctx, buf, stream, &val,
-                                        &log_event.timestamp);
-                        if (ret < 0 ) {
-                            goto error;
+                    if (check == FLB_TRUE) {
+                        if (strncmp(ctx->log_key, key_str, key_str_size) == 0) {
+                            found = FLB_TRUE;
+                            val = (kv+j)->val;
+                            ret = add_event(ctx, buf, stream, &val,
+                                            &log_event.timestamp);
+                            if (ret < 0 ) {
+                                goto error;
+                            }
                         }
                     }
+
+                }
+                if (found == FLB_FALSE) {
+                    flb_plg_error(ctx->ins, "Could not find log_key '%s' in record",
+                                  ctx->log_key);
                 }
 
+                if (ret == 0) {
+                    i++;
+                }
+
+                continue;
             }
-            if (found == FLB_FALSE) {
-                flb_plg_error(ctx->ins, "Could not find log_key '%s' in record",
-                              ctx->log_key);
+
+            if (strncmp(input_plugin, "cpu", 3) == 0
+                || strncmp(input_plugin, "mem", 3) == 0) {
+                /* Added for EMF support: Construct a list */
+                struct mk_list flb_intermediate_metrics;
+                mk_list_init(&flb_intermediate_metrics);
+
+                kv = map.via.map.ptr;
+
+                /*
+                 * Iterate through the record map, extract intermediate metric data,
+                 * and add to the list.
+                 */
+                for (i = 0; i < map_size; i++) {
+                    metric = flb_calloc(1, sizeof(struct flb_intermediate_metric));
+                    if (!metric) {
+                        goto error;
+                    }
+
+                    metric->key = (kv + i)->key;
+                    metric->value = (kv + i)->val;
+                    metric->metric_type = intermediate_metric_type;
+                    metric->metric_unit = intermediate_metric_unit;
+                    metric->metric_resolution = intermediate_metric_resolution;
+                    metric->timestamp = log_event.timestamp;
+
+                    mk_list_add(&metric->_head, &flb_intermediate_metrics);
+
+                }
+
+                /* The msgpack object is only valid during the lifetime of the
+                 * sbuffer & the unpacked result.
+                 */
+                msgpack_sbuffer_init(&mp_sbuf);
+                msgpack_unpacked_init(&mp_emf_result);
+
+                ret = pack_emf_payload(ctx,
+                                       &flb_intermediate_metrics,
+                                       input_plugin,
+                                       log_event.timestamp,
+                                       &mp_sbuf,
+                                       &mp_emf_result,
+                                       &emf_payload);
+
+                /* free the intermediate metric list */
+
+                mk_list_foreach_safe(head, tmp, &flb_intermediate_metrics) {
+                    an_item = mk_list_entry(head, struct flb_intermediate_metric, _head);
+                    mk_list_del(&an_item->_head);
+                    flb_free(an_item);
+                }
+
+                if (ret != 0) {
+                    flb_plg_error(ctx->ins, "Failed to convert EMF metrics to msgpack object. ret=%i", ret);
+                    msgpack_unpacked_destroy(&mp_emf_result);
+                    msgpack_sbuffer_destroy(&mp_sbuf);
+                    goto error;
+                }
+                ret = add_event(ctx, buf, stream, &emf_payload,
+                                &log_event.timestamp);
+
+                msgpack_unpacked_destroy(&mp_emf_result);
+                msgpack_sbuffer_destroy(&mp_sbuf);
+
+            } else {
+                ret = add_event(ctx, buf, stream, &map,
+                                &log_event.timestamp);
+            }
+
+            if (ret < 0 ) {
+                goto error;
             }
 
             if (ret == 0) {
                 i++;
             }
-
-            continue;
         }
-
-        if (strncmp(input_plugin, "cpu", 3) == 0 
-            || strncmp(input_plugin, "mem", 3) == 0) {
+        flb_log_event_decoder_destroy(&log_decoder);
+    }
+    else if (event_type == FLB_EVENT_TYPE_METRICS) {
+        if (strncmp(input_plugin, "fluentbit_metrics", 17) == 0) {
+            ret = cmt_decode_msgpack_create(&cmt,
+                                            (char *) data,
+                                            bytes,
+                                            &off);
+            if (ret != CMT_DECODE_MSGPACK_SUCCESS) {
+                goto error;
+            }
+            /* TODO: How to handle cmetrics' msgpack payload? */
             /* Added for EMF support: Construct a list */
             struct mk_list flb_intermediate_metrics;
             mk_list_init(&flb_intermediate_metrics);
 
             kv = map.via.map.ptr;
 
-            /* 
-             * Iterate through the record map, extract intermediate metric data, 
+            /*
+             * Iterate through the record map, extract intermediate metric data,
              * and add to the list.
              */
             for (i = 0; i < map_size; i++) {
@@ -923,60 +1035,16 @@ int process_and_send(struct flb_cloudwatch *ctx, const char *input_plugin,
                 metric->value = (kv + i)->val;
                 metric->metric_type = intermediate_metric_type;
                 metric->metric_unit = intermediate_metric_unit;
+                metric->metric_resolution = intermediate_metric_resolution;
                 metric->timestamp = log_event.timestamp;
 
                 mk_list_add(&metric->_head, &flb_intermediate_metrics);
-                
-            }  
 
-            /* The msgpack object is only valid during the lifetime of the
-             * sbuffer & the unpacked result.
-            */
-            msgpack_sbuffer_init(&mp_sbuf);
-            msgpack_unpacked_init(&mp_emf_result);
-
-            ret = pack_emf_payload(ctx,
-                                    &flb_intermediate_metrics,
-                                    input_plugin,
-                                    log_event.timestamp,
-                                    &mp_sbuf,
-                                    &mp_emf_result,
-                                    &emf_payload);
-            
-            /* free the intermediate metric list */
-            
-            mk_list_foreach_safe(head, tmp, &flb_intermediate_metrics) {
-                an_item = mk_list_entry(head, struct flb_intermediate_metric, _head);
-                mk_list_del(&an_item->_head);
-                flb_free(an_item);
             }
 
-            if (ret != 0) {
-                flb_plg_error(ctx->ins, "Failed to convert EMF metrics to msgpack object. ret=%i", ret);
-                msgpack_unpacked_destroy(&mp_emf_result);
-                msgpack_sbuffer_destroy(&mp_sbuf);
-                goto error;
-            }
-            ret = add_event(ctx, buf, stream, &emf_payload,
-                            &log_event.timestamp);
-
-            msgpack_unpacked_destroy(&mp_emf_result);
-            msgpack_sbuffer_destroy(&mp_sbuf);
-
-        } else {
-            ret = add_event(ctx, buf, stream, &map,
-                            &log_event.timestamp);
-        }
-
-        if (ret < 0 ) {
-            goto error;
-        }
-
-        if (ret == 0) {
-            i++;
+            cmt_destroy(cmt);
         }
     }
-    flb_log_event_decoder_destroy(&log_decoder);
 
     /* send any remaining events */
     ret = send_log_events(ctx, buf);
