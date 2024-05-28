@@ -241,6 +241,11 @@ static struct flb_config_map config_map[] = {
      0, FLB_TRUE, offsetof(struct flb_splunk, tag_key),
      ""
     },
+    {
+     FLB_CONFIG_MAP_BOOL, "store_token_to_metadata", "true",
+     0, FLB_TRUE, offsetof(struct flb_splunk, store_token_to_metadata),
+     "Store Splunk HEC tokens to matadata. If set as false, they will be stored into records."
+    },
 
 
     /* EOF */

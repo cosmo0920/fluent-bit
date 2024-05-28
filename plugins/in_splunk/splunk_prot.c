@@ -233,12 +233,24 @@ static int process_raw_payload_pack(struct flb_splunk *ctx, flb_sds_t tag, char 
                 FLB_LOG_EVENT_STRING_VALUE(buf, size));
     }
 
-    if (ctx->ingested_auth_header != NULL) {
-        if (ret == FLB_EVENT_ENCODER_SUCCESS) {
-            ret = flb_log_event_encoder_append_metadata_values(
-                &ctx->log_encoder,
-                FLB_LOG_EVENT_CSTRING_VALUE("hec_token"),
-                FLB_LOG_EVENT_CSTRING_VALUE(ctx->ingested_auth_header));
+    if (ctx->store_token_to_metadata == FLB_TRUE) {
+        if (ctx->ingested_auth_header != NULL) {
+            if (ret == FLB_EVENT_ENCODER_SUCCESS) {
+                ret = flb_log_event_encoder_append_metadata_values(
+                    &ctx->log_encoder,
+                    FLB_LOG_EVENT_CSTRING_VALUE("hec_token"),
+                    FLB_LOG_EVENT_CSTRING_VALUE(ctx->ingested_auth_header));
+            }
+        }
+    }
+    else {
+        if (ctx->ingested_auth_header != NULL) {
+            if (ret == FLB_EVENT_ENCODER_SUCCESS) {
+                ret = flb_log_event_encoder_append_body_values(
+                    &ctx->log_encoder,
+                    FLB_LOG_EVENT_CSTRING_VALUE(ctx->store_token_key),
+                    FLB_LOG_EVENT_CSTRING_VALUE(ctx->ingested_auth_header));
+            }
         }
     }
 
@@ -290,12 +302,24 @@ static void process_flb_log_append(struct flb_splunk *ctx, msgpack_object *recor
                 record);
     }
 
-    if (ctx->ingested_auth_header != NULL) {
-        if (ret == FLB_EVENT_ENCODER_SUCCESS) {
-            ret = flb_log_event_encoder_append_metadata_values(
-                &ctx->log_encoder,
-                FLB_LOG_EVENT_CSTRING_VALUE("hec_token"),
-                FLB_LOG_EVENT_CSTRING_VALUE(ctx->ingested_auth_header));
+    if (ctx->store_token_to_metadata == FLB_TRUE) {
+        if (ctx->ingested_auth_header != NULL) {
+            if (ret == FLB_EVENT_ENCODER_SUCCESS) {
+                ret = flb_log_event_encoder_append_metadata_values(
+                    &ctx->log_encoder,
+                    FLB_LOG_EVENT_CSTRING_VALUE("hec_token"),
+                    FLB_LOG_EVENT_CSTRING_VALUE(ctx->ingested_auth_header));
+            }
+        }
+    }
+    else {
+        if (ctx->ingested_auth_header != NULL) {
+            if (ret == FLB_EVENT_ENCODER_SUCCESS) {
+                ret = flb_log_event_encoder_append_body_values(
+                    &ctx->log_encoder,
+                    FLB_LOG_EVENT_CSTRING_VALUE(ctx->store_token_key),
+                    FLB_LOG_EVENT_CSTRING_VALUE(ctx->ingested_auth_header));
+            }
         }
     }
 

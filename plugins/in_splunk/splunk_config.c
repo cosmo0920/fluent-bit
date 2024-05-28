@@ -34,6 +34,7 @@ struct flb_splunk *splunk_config_create(struct flb_input_instance *ins)
     int                        ret;
     struct flb_splunk         *ctx;
     const char                *tmp;
+    flb_sds_t                  store_key;
 
     ctx = flb_calloc(1, sizeof(struct flb_splunk));
     if (!ctx) {
@@ -49,6 +50,13 @@ struct flb_splunk *splunk_config_create(struct flb_input_instance *ins)
         flb_free(ctx);
         return NULL;
     }
+
+    store_key = flb_sds_create("@splunk_token");
+    if (store_key == NULL) {
+        flb_free(ctx);
+        return NULL;
+    }
+    ctx->store_token_key = store_key;
 
     ctx->auth_header = NULL;
     ctx->ingested_auth_header = NULL;
@@ -163,6 +171,10 @@ int splunk_config_destroy(struct flb_splunk *ctx)
 
     if (ctx->auth_header != NULL) {
         flb_sds_destroy(ctx->auth_header);
+    }
+
+    if (ctx->store_token_key != NULL) {
+        flb_sds_destroy(ctx->store_token_key);
     }
 
     if (ctx->downstream != NULL) {
