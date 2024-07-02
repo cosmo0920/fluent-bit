@@ -386,6 +386,12 @@ static int cb_gelf_init(struct flb_output_instance *ins, struct flb_config *conf
         ctx->mode = FLB_GELF_UDP;
     }
 
+    /* Config Gelf_Tag_Key */
+    tmp = flb_output_get_property("gelf_tag_key", ins);
+    if (tmp) {
+        ctx->fields.tag_key = flb_sds_create(tmp);
+    }
+
     /* Config Gelf_Timestamp_Key */
     tmp = flb_output_get_property("gelf_timestamp_key", ins);
     if (tmp) {
@@ -479,6 +485,7 @@ static int cb_gelf_exit(void *data, struct flb_config *config)
         close(ctx->fd);
     }
 
+    flb_sds_destroy(ctx->fields.tag_key);
     flb_sds_destroy(ctx->fields.timestamp_key);
     flb_sds_destroy(ctx->fields.host_key);
     flb_sds_destroy(ctx->fields.short_message_key);
@@ -497,6 +504,11 @@ static struct flb_config_map config_map[] = {
      FLB_CONFIG_MAP_STR, "mode", "udp",
      0, FLB_FALSE, 0,
      "The protocol to use. 'tls', 'tcp' or 'udp'"
+    },
+    {
+     FLB_CONFIG_MAP_STR, "gelf_tag_key", "tag",
+     0, FLB_FALSE, 0,
+     "tag key name (MUST be set in GELF)"
     },
     {
      FLB_CONFIG_MAP_STR, "gelf_short_message_key", NULL,
