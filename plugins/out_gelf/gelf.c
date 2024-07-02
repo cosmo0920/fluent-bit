@@ -27,6 +27,7 @@
 #include <fluent-bit/flb_random.h>
 #include <fluent-bit/flb_config_map.h>
 #include <fluent-bit/flb_log_event_decoder.h>
+#include <fluent-bit/flb_msgpack_append_message.h>
 #include <msgpack.h>
 
 #include <stdio.h>
@@ -246,6 +247,8 @@ static void cb_gelf_flush(struct flb_event_chunk *event_chunk,
     struct flb_out_gelf_config *ctx = out_context;
     struct flb_log_event_decoder log_decoder;
     struct flb_log_event log_event;
+    char   *appended_buffer;
+    size_t  appended_size;
 
     if (ctx->mode != FLB_GELF_UDP) {
         u_conn = flb_upstream_conn_get(ctx->u);
@@ -286,8 +289,27 @@ static void cb_gelf_flush(struct flb_event_chunk *event_chunk,
             FLB_OUTPUT_RETURN(FLB_ERROR);
         }
 
-        tmp = flb_msgpack_to_gelf(&s, &map, &log_event.timestamp,
-                                  &(ctx->fields));
+        ret = flb_msgpack_append_message_to_record(&appended_buffer,
+                                                   &appended_size,
+                                                   ctx->fields.tag_key,
+                                                   (char *) event_chunk->data + off,
+                                                   event_chunk->size,
+                                                   event_chunk->tag,
+                                                   strlen(event_chunk->tag),
+                                                   MSGPACK_OBJECT_STR);
+
+        if (ret == FLB_MAP_EXPANSION_ERROR) {
+            flb_plg_debug(ctx->ins, "error expanding with tag : %d", ret);
+        }
+
+        if (appended_buffer != NULL) {
+            tmp = flb_msgpack_raw_to_gelf(appended_buffer, appended_size, &log_event.timestamp,
+                                          &(ctx->fields));
+        }
+        else {
+            tmp = flb_msgpack_to_gelf(&s, &map, &log_event.timestamp,
+                                      &(ctx->fields));
+        }
         if (tmp != NULL) {
             s = tmp;
             if (ctx->mode == FLB_GELF_UDP) {
