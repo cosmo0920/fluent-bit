@@ -73,3 +73,48 @@ jobs:
         run: |
           ldd ./bin/fluent-bit
         working-directory: build
+
+  pr-compile-qemu-aarch64-linux:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - aarch64
+    steps:
+      - name: Checkout Fluent Bit code
+        uses: actions/checkout@v4
+
+      - name: Prepare and build with QEMU ${{ matrix.arch }}
+        uses: uraimo/run-on-arch-action@v2
+        id: build-and-test-on-qemu
+        with:
+          arch: ${{ matrix.arch }}
+          distro: ubuntu20.04
+          shell: /bin/bash
+          dockerRunArgs: |
+            --volume "/var/lib/dbus/machine-id:/var/lib/dbus/machine-id"
+            --volume "/etc/machine-id:/etc/machine-id"
+          install: |
+            apt-get update
+            apt-get install -y gcc-7 g++-7 clang-6.0 libyaml-dev cmake flex bison libssl-dev #libsystemd-dev
+            ln -s /usr/bin/llvm-symbolizer-6.0 /usr/bin/llvm-symbolizer || true
+
+            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 90
+            update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-7 90
+            update-alternatives --install /usr/bin/clang clang /usr/bin/clang-6.0 90
+          run: |
+            cd build
+            export nparallel=$(( $(getconf _NPROCESSORS_ONLN) > 8 ? 8 : $(getconf _NPROCESSORS_ONLN) ))
+            export FLB_OPTION="-DFLB_WITHOUT_flb-it-network=1 -DFLB_WITHOUT_flb-it-fstore=1"
+            export FLB_OMIT_OPTION="-DFLB_WITHOUT_flb-it-utils=1 -DFLB_WITHOUT_flb-it-pack=1"
+            export GLOBAL_OPTION="-DFLB_BACKTRACE=Off -DFLB_SHARED_LIB=Off -DFLB_DEBUG=On -DFLB_ALL=On -DFLB_EXAMPLES=Off"
+            export FLB_UNIT_TEST_OPTION="-DFLB_TESTS_INTERNAL=On"
+            export FLB_OPT="${FLB_OPTION} ${GLOBAL_OPTION} ${FLB_UNIT_TEST_OPTION} ${FLB_OMIT_OPTION}"
+
+            echo "CC = gcc, CXX = gcc, FLB_OPT = $FLB_OPT"
+
+            cmake ${FLB_OPT}  ../
+            make -j $nparallel
+            ctest -j $nparallel --build-run-dir . --output-on-failure
