@@ -27,11 +27,11 @@ RUN sed -i -e "s/^mirrorlist=http:\/\/mirrorlist.centos.org/#mirrorlist=http:\/\
     tar gzip && \
     yum install -y epel-release && \
     yum install -y cmake3 && \
-    yum clean all && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="${CMAKE_URL}/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
     echo "Downloading CMake ${CMAKE_VERSION}: ${cmake_download_url} -> ${CMAKE_HOME}" && \
-    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
+    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1 && \
+    yum clean all
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
 
@@ -41,6 +41,8 @@ ARG FLB_UNICODE_ENCODER=Off
 ENV FLB_UNICODE_ENCODER=$FLB_UNICODE_ENCODER
 ARG FLB_KAFKA=Off
 ENV FLB_KAFKA=$FLB_KAFKA
+ARG FLB_ARROW=Off
+ENV FLB_ARROW=$FLB_ARROW
 
 # centos/7.arm64v8 base image
 FROM arm64v8/centos:7 AS centos-7.arm64v8-base
@@ -62,11 +64,11 @@ RUN sed -i -e "s/^mirrorlist=http:\/\/mirrorlist.centos.org/#mirrorlist=http:\/\
     tar gzip && \
     yum install -y epel-release && \
     yum install -y cmake3 && \
-    yum clean all && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="${CMAKE_URL}/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
     echo "Downloading CMake ${CMAKE_VERSION}: ${cmake_download_url} -> ${CMAKE_HOME}" && \
-    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
+    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1 && \
+    yum clean all
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
 
@@ -77,6 +79,8 @@ ARG FLB_UNICODE_ENCODER=Off
 ENV FLB_UNICODE_ENCODER=$FLB_UNICODE_ENCODER
 ARG FLB_KAFKA=Off
 ENV FLB_KAFKA=$FLB_KAFKA
+ARG FLB_ARROW=Off
+ENV FLB_ARROW=$FLB_ARROW
 
 # Need larger page size
 ARG FLB_JEMALLOC_OPTIONS="--with-lg-page=16 --with-lg-quantum=3"
@@ -118,6 +122,8 @@ ARG FLB_UNICODE_ENCODER=On
 ENV FLB_UNICODE_ENCODER=$FLB_UNICODE_ENCODER
 ARG FLB_KAFKA=On
 ENV FLB_KAFKA=$FLB_KAFKA
+ARG FLB_ARROW=Off
+ENV FLB_ARROW=$FLB_ARROW
 
 # centos/8.arm64v8 base image
 FROM arm64v8/centos:8 AS centos-8.arm64v8-base
@@ -157,6 +163,8 @@ ARG FLB_UNICODE_ENCODER=On
 ENV FLB_UNICODE_ENCODER=$FLB_UNICODE_ENCODER
 ARG FLB_KAFKA=On
 ENV FLB_KAFKA=$FLB_KAFKA
+ARG FLB_ARROW=Off
+ENV FLB_ARROW=$FLB_ARROW
 
 # Need larger page size
 ARG FLB_JEMALLOC_OPTIONS="--with-lg-page=16 --with-lg-quantum=3"
@@ -177,16 +185,29 @@ RUN dnf -y install 'dnf-command(config-manager)' && dnf -y config-manager --set-
     cyrus-sasl-lib cyrus-sasl-devel openssl openssl-libs openssl-devel libcurl-devel pkgconf-pkg-config \
     libyaml-devel zlib-devel \
     tar gzip && \
-    dnf clean all && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="${CMAKE_URL}/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
     echo "Downloading CMake ${CMAKE_VERSION}: ${cmake_download_url} -> ${CMAKE_HOME}" && \
-    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
+    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1 && \
+    dnf install -y epel-release && \
+    dnf install -y https://packages.apache.org/artifactory/arrow/almalinux/$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)/apache-arrow-release-latest.rpm && \
+    dnf config-manager --set-enabled epel || : && \
+    dnf config-manager --set-enabled powertools || : && \
+    dnf config-manager --set-enabled crb || : && \
+    dnf config-manager --set-enabled ol$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)_codeready_builder || : && \
+    dnf config-manager --set-enabled codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-rhui-rpms || : && \
+    subscription-manager repos --enable codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-$(arch)-rpms || : && \
+    dnf install -y arrow-glib-devel parquet-glib-devel && \
+    dnf clean all
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
 
 ARG FLB_OUT_PGSQL=On
 ENV FLB_OUT_PGSQL=$FLB_OUT_PGSQL
+ARG FLB_UNICODE_ENCODER=On
+ENV FLB_UNICODE_ENCODER=$FLB_UNICODE_ENCODER
+ARG FLB_ARROW=On
+ENV FLB_ARROW=$FLB_ARROW
 
 # hadolint ignore=DL3029
 FROM --platform=arm64 quay.io/centos/centos:stream9 AS centos-9.arm64v8-base
@@ -206,11 +227,20 @@ RUN dnf -y install 'dnf-command(config-manager)' && dnf -y config-manager --set-
     cyrus-sasl-lib cyrus-sasl-devel openssl openssl-libs openssl-devel libcurl-devel pkgconf-pkg-config \
     libyaml-devel zlib-devel \
     tar gzip && \
-    dnf clean all && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="${CMAKE_URL}/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
     echo "Downloading CMake ${CMAKE_VERSION}: ${cmake_download_url} -> ${CMAKE_HOME}" && \
-    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
+    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1 && \
+    dnf install -y epel-release && \
+    dnf install -y https://packages.apache.org/artifactory/arrow/almalinux/$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)/apache-arrow-release-latest.rpm && \
+    dnf config-manager --set-enabled epel || : && \
+    dnf config-manager --set-enabled powertools || : && \
+    dnf config-manager --set-enabled crb || : && \
+    dnf config-manager --set-enabled ol$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)_codeready_builder || : && \
+    dnf config-manager --set-enabled codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-rhui-rpms || : && \
+    subscription-manager repos --enable codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-$(arch)-rpms || : && \
+    dnf install -y arrow-glib-devel parquet-glib-devel && \
+    dnf clean all
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
 
@@ -220,6 +250,8 @@ ARG FLB_UNICODE_ENCODER=On
 ENV FLB_UNICODE_ENCODER=$FLB_UNICODE_ENCODER
 ARG FLB_KAFKA=On
 ENV FLB_KAFKA=$FLB_KAFKA
+ARG FLB_ARROW=On
+ENV FLB_ARROW=$FLB_ARROW
 
 # Need larger page size
 ARG FLB_JEMALLOC_OPTIONS="--with-lg-page=16 --with-lg-quantum=3"
@@ -265,6 +297,7 @@ RUN cmake -DCMAKE_INSTALL_PREFIX="$CMAKE_INSTALL_PREFIX" \
     -DFLB_JEMALLOC="${FLB_JEMALLOC}" \
     -DFLB_CHUNK_TRACE="${FLB_CHUNK_TRACE}" \
     -DFLB_UNICODE_ENCODER="${FLB_UNICODE_ENCODER}" \
+    -DFLB_ARROW="${FLB_ARROW}" \
     ../
 
 VOLUME [ "/output" ]
