@@ -21,7 +21,17 @@ RUN yum -y update && \
     wget unzip systemd-devel wget flex bison \
     postgresql-libs postgresql-devel postgresql-server postgresql \
     cyrus-sasl-lib openssl openssl-libs openssl-devel libyaml-devel pkgconf-pkg-config && \
-    yum clean all
+    dnf install -y epel-release && \
+    dnf install -y https://packages.apache.org/artifactory/arrow/almalinux/$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)/apache-arrow-release-latest.rpm && \
+    dnf config-manager --set-enabled epel || : && \
+    dnf config-manager --set-enabled powertools || : && \
+    dnf config-manager --set-enabled crb || : && \
+    dnf config-manager --set-enabled ol$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)_codeready_builder || : && \
+    dnf config-manager --set-enabled codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-rhui-rpms || : && \
+    subscription-manager repos --enable codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-$(arch)-rpms || : && \
+    dnf install -y arrow-glib-devel parquet-glib-devel && \
+    dnf clean all
+
 
 # almalinux/8.arm64v8 base image
 # hadolint ignore=DL3029
@@ -38,7 +48,16 @@ RUN yum -y update && \
     wget unzip systemd-devel wget flex bison \
     postgresql-libs postgresql-devel postgresql-server postgresql \
     cyrus-sasl-lib openssl openssl-libs openssl-devel libyaml-devel pkgconf-pkg-config && \
-    yum clean all
+    dnf install -y epel-release && \
+    dnf install -y https://packages.apache.org/artifactory/arrow/almalinux/$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)/apache-arrow-release-latest.rpm && \
+    dnf config-manager --set-enabled epel || : && \
+    dnf config-manager --set-enabled powertools || : && \
+    dnf config-manager --set-enabled crb || : && \
+    dnf config-manager --set-enabled ol$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)_codeready_builder || : && \
+    dnf config-manager --set-enabled codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-rhui-rpms || : && \
+    subscription-manager repos --enable codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-$(arch)-rpms || : && \
+    dnf install -y arrow-glib-devel parquet-glib-devel && \
+    dnf clean all
 
 # Need larger page size
 ARG FLB_JEMALLOC_OPTIONS="--with-lg-page=16 --with-lg-quantum=3"
@@ -55,7 +74,16 @@ RUN yum -y update && \
     wget unzip systemd-devel wget flex bison \
     postgresql-libs postgresql-devel postgresql-server postgresql \
     cyrus-sasl-lib openssl openssl-libs openssl-devel libyaml-devel pkgconf-pkg-config && \
-    yum clean all
+    dnf install -y epel-release && \
+    dnf install -y https://packages.apache.org/artifactory/arrow/almalinux/$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)/apache-arrow-release-latest.rpm && \
+    dnf config-manager --set-enabled epel || : && \
+    dnf config-manager --set-enabled powertools || : && \
+    dnf config-manager --set-enabled crb || : && \
+    dnf config-manager --set-enabled ol$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)_codeready_builder || : && \
+    dnf config-manager --set-enabled codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-rhui-rpms || : && \
+    subscription-manager repos --enable codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-$(arch)-rpms || : && \
+    dnf install -y arrow-glib-devel parquet-glib-devel && \
+    dnf clean all
 
 # almalinux/8.arm64v8 base image
 # hadolint ignore=DL3029
@@ -72,7 +100,16 @@ RUN yum -y update && \
     wget unzip systemd-devel wget flex bison \
     postgresql-libs postgresql-devel postgresql-server postgresql \
     cyrus-sasl-lib openssl openssl-libs openssl-devel libyaml-devel pkgconf-pkg-config && \
-    yum clean all
+    dnf install -y epel-release && \
+    dnf install -y https://packages.apache.org/artifactory/arrow/almalinux/$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)/apache-arrow-release-latest.rpm && \
+    dnf config-manager --set-enabled epel || : && \
+    dnf config-manager --set-enabled powertools || : && \
+    dnf config-manager --set-enabled crb || : && \
+    dnf config-manager --set-enabled ol$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)_codeready_builder || : && \
+    dnf config-manager --set-enabled codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-rhui-rpms || : && \
+    subscription-manager repos --enable codeready-builder-for-rhel-$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)-$(arch)-rpms || : && \
+    dnf install -y arrow-glib-devel parquet-glib-devel && \
+    dnf clean all
 
 # Need larger page size
 ARG FLB_JEMALLOC_OPTIONS="--with-lg-page=16 --with-lg-quantum=3"
@@ -106,6 +143,7 @@ ARG FLB_CHUNK_TRACE=On
 ARG FLB_UNICODE_ENCODER=On
 ARG FLB_KAFKA=On
 ARG FLB_OUT_PGSQL=On
+ARG FLB_ARROW=On
 
 RUN cmake -DCMAKE_INSTALL_PREFIX="$CMAKE_INSTALL_PREFIX" \
     -DCMAKE_INSTALL_SYSCONFDIR="$CMAKE_INSTALL_SYSCONFDIR" \
@@ -121,6 +159,7 @@ RUN cmake -DCMAKE_INSTALL_PREFIX="$CMAKE_INSTALL_PREFIX" \
     -DFLB_JEMALLOC="${FLB_JEMALLOC}" \
     -DFLB_CHUNK_TRACE="${FLB_CHUNK_TRACE}" \
     -DFLB_UNICODE_ENCODER="${FLB_UNICODE_ENCODER}" \
+    -DFLB_ARROW="${FLB_ARROW}" \
     ../
 
 VOLUME [ "/output" ]
