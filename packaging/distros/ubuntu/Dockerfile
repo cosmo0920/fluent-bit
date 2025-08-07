@@ -40,6 +40,8 @@ RUN apt-get update && \
     curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
+ARG FLB_ARROW=Off
+ENV FLB_ARROW=$FLB_ARROW
 
 # ubuntu/18.04 base image
 FROM ubuntu:18.04 AS ubuntu-18.04-base
@@ -72,6 +74,8 @@ RUN apt-get update && \
     curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
+ARG FLB_ARROW=Off
+ENV FLB_ARROW=$FLB_ARROW
 
 # ubuntu/18.04.arm64v8 base image
 FROM arm64v8/ubuntu:18.04 AS ubuntu-18.04.arm64v8-base
@@ -106,6 +110,8 @@ RUN apt-get update && \
     curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
+ARG FLB_ARROW=Off
+ENV FLB_ARROW=$FLB_ARROW
 
 # ubuntu/20.04 base image
 FROM ubuntu:20.04 AS ubuntu-20.04-base
@@ -127,9 +133,15 @@ RUN apt-get update && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
     echo "Downloading CMake ${CMAKE_VERSION}: ${cmake_download_url} -> ${CMAKE_HOME}" && \
-    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
+    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1 && \
+    wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get -qq update && \
+    apt-get install -y libarrow-glib-dev libparquet-glib-dev
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
+ARG FLB_ARROW=On
+ENV FLB_ARROW=$FLB_ARROW
 
 # ubuntu/20.04.arm64v8 base image
 FROM arm64v8/ubuntu:20.04 AS ubuntu-20.04.arm64v8-base
@@ -153,9 +165,15 @@ RUN apt-get update && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
     echo "Downloading CMake ${CMAKE_VERSION}: ${cmake_download_url} -> ${CMAKE_HOME}" && \
-    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
+    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1 && \
+    wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get -qq update && \
+    apt-get install -y libarrow-glib-dev libparquet-glib-dev
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
+ARG FLB_ARROW=On
+ENV FLB_ARROW=$FLB_ARROW
 
 # ubuntu/22.04 base image
 FROM ubuntu:22.04 AS ubuntu-22.04-base
@@ -177,9 +195,15 @@ RUN apt-get update && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
     echo "Downloading CMake ${CMAKE_VERSION}: ${cmake_download_url} -> ${CMAKE_HOME}" && \
-    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
+    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1 && \
+    wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get -qq update && \
+    apt-get install -y libarrow-glib-dev libparquet-glib-dev
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
+ARG FLB_ARROW=On
+ENV FLB_ARROW=$FLB_ARROW
 
 # ubuntu/22.04.arm64v8 base image
 FROM arm64v8/ubuntu:22.04 AS ubuntu-22.04.arm64v8-base
@@ -203,9 +227,15 @@ RUN apt-get update && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
     echo "Downloading CMake ${CMAKE_VERSION}: ${cmake_download_url} -> ${CMAKE_HOME}" && \
-    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
+    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1 && \
+    wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get -qq update && \
+    apt-get install -y libarrow-glib-dev libparquet-glib-dev
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
+ARG FLB_ARROW=On
+ENV FLB_ARROW=$FLB_ARROW
 
 # ubuntu/24.04 base image
 FROM ubuntu:24.04 AS ubuntu-24.04-base
@@ -227,9 +257,15 @@ RUN apt-get update && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
     echo "Downloading CMake ${CMAKE_VERSION}: ${cmake_download_url} -> ${CMAKE_HOME}" && \
-    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
+    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1 && \
+    wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get -qq update && \
+    apt-get install -y libarrow-glib-dev libparquet-glib-dev
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
+ARG FLB_ARROW=On
+ENV FLB_ARROW=$FLB_ARROW
 
 # ubuntu/24.04.arm64v8 base image
 FROM arm64v8/ubuntu:24.04 AS ubuntu-24.04.arm64v8-base
@@ -253,9 +289,15 @@ RUN apt-get update && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
     echo "Downloading CMake ${CMAKE_VERSION}: ${cmake_download_url} -> ${CMAKE_HOME}" && \
-    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
+    curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1 && \
+    wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get -qq update && \
+    apt-get install -y libarrow-glib-dev libparquet-glib-dev
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
+ARG FLB_ARROW=On
+ENV FLB_ARROW=$FLB_ARROW
 
 # Common build for all distributions now
 # hadolint ignore=DL3006
@@ -296,6 +338,7 @@ RUN cmake -DCMAKE_INSTALL_PREFIX="$CMAKE_INSTALL_PREFIX" \
     -DFLB_NIGHTLY_BUILD="$FLB_NIGHTLY_BUILD" \
     -DFLB_JEMALLOC="${FLB_JEMALLOC}" \
     -DFLB_CHUNK_TRACE="${FLB_CHUNK_TRACE}" \
+    -DFLB_ARROW="${FLB_ARROW}" \
     ../
 
 VOLUME [ "/output" ]
