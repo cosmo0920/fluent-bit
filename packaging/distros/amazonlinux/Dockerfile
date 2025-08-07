@@ -32,6 +32,8 @@ RUN yum -y update && \
     curl -jksSL "${cmake_download_url}" | tar -xzf - -C "${CMAKE_HOME}" --strip-components 1
 
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
+ARG FLB_ARROW=Off
+ENV FLB_ARROW=$FLB_ARROW
 
 # amazonlinux/2.arm64v8 base image
 FROM arm64v8/amazonlinux:2 AS amazonlinux-2.arm64v8-base
@@ -60,6 +62,8 @@ RUN yum -y update && \
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
 ARG FLB_KAFKA=Off
 ENV FLB_KAFKA=$FLB_KAFKA
+ARG FLB_ARROW=Off
+ENV FLB_ARROW=$FLB_ARROW
 
 FROM amazonlinux:2023 AS amazonlinux-2023-base
 
@@ -75,6 +79,8 @@ RUN yum -y update && \
     postgresql-devel postgresql-libs \
     libyaml-devel zlib-devel libcurl-devel pkgconf-pkg-config \
     tar gzip && \
+    dnf install -y https://packages.apache.org/artifactory/arrow/amazon-linux/$(cut -d: -f6 /etc/system-release-cpe)/apache-arrow-release-latest.rpm && \
+    dnf install -y arrow-glib-devel parquet-glib-devel && \
     yum clean all && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="${CMAKE_URL}/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
@@ -84,6 +90,8 @@ RUN yum -y update && \
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
 ARG FLB_KAFKA=On
 ENV FLB_KAFKA=$FLB_KAFKA
+ARG FLB_ARROW=On
+ENV FLB_ARROW=$FLB_ARROW
 
 # hadolint ignore=DL3029
 FROM --platform=arm64 amazonlinux:2023 AS amazonlinux-2023.arm64v8-base
@@ -102,6 +110,8 @@ RUN yum -y update && \
     postgresql-devel postgresql-libs \
     libyaml-devel zlib-devel libcurl-devel pkgconf-pkg-config \
     tar gzip && \
+    dnf install -y https://packages.apache.org/artifactory/arrow/amazon-linux/$(cut -d: -f6 /etc/system-release-cpe)/apache-arrow-release-latest.rpm && \
+    dnf install -y arrow-glib-devel parquet-glib-devel && \
     yum clean all && \
     mkdir -p "${CMAKE_HOME}" && \
     cmake_download_url="${CMAKE_URL}/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" && \
@@ -111,6 +121,8 @@ RUN yum -y update && \
 ENV PATH="${CMAKE_HOME}/bin:${PATH}"
 ARG FLB_KAFKA=On
 ENV FLB_KAFKA=$FLB_KAFKA
+ARG FLB_ARROW=On
+ENV FLB_ARROW=$FLB_ARROW
 
 
 # Common build for all distributions now
@@ -152,6 +164,7 @@ RUN cmake -DCMAKE_INSTALL_PREFIX="$CMAKE_INSTALL_PREFIX" \
     -DFLB_NIGHTLY_BUILD="$FLB_NIGHTLY_BUILD" \
     -DFLB_JEMALLOC="${FLB_JEMALLOC}" \
     -DFLB_CHUNK_TRACE="${FLB_CHUNK_TRACE}" \
+    -DFLB_ARROW="${FLB_ARROW}" \
     ../
 
 VOLUME [ "/output" ]
