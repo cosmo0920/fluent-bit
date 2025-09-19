@@ -257,7 +257,26 @@ jobs:
             dpkg --add-architecture riscv64
 
             apt-get update
-            apt-get install -y gcc-12 g++-12 libyaml-dev flex bison libssl-dev libbpf-dev linux-tools-common lld
+            apt-get install -y gcc-12 g++-12 libyaml-dev flex bison libssl-dev libbpf-dev linux-tools-common
+            arch="$(dpkg --print-architecture)"
+            case "$arch" in
+              riscv64)
+                apt-get install -y gcc-12 g++-12 libyaml-dev flex bison libssl-dev \
+                                   libbpf-dev linux-tools-common lld-12
+                update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-12 50
+                ;;
+              s390x)
+                if ! apt-get install -y lld; then
+                  apt-get install -y lld-15 || apt-get install -y lld-14 || apt-get install -y lld-13
+                  if command -v ld.lld-15 >/dev/null; then update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-15 50; fi
+                  if command -v ld.lld-14 >/dev/null; then update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-14 50; fi
+                  if command -v ld.lld-13 >/dev/null; then update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-13 50; fi
+                fi
+                ;;
+              *)
+                apt-get install -y lld
+                ;;
+            esac
             apt-get satisfy -y cmake "cmake (<< 4.0)"
 
             update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 90
