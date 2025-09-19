@@ -229,7 +229,7 @@ jobs:
   run-qemu-ubuntu-unit-tests:
     # We chain this after Linux one as there are CPU time costs for QEMU emulation
     needs:
-      - run-ubuntu-unit-tests
+      # - run-ubuntu-unit-tests
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     strategy:
